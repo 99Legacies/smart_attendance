@@ -1,0 +1,59 @@
+﻿Analyzing smart_attendance...                                   
+
+   info - The import of 'package:flutter/services.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart'. Try removing the import directive - lib\core\theme\app_theme.dart:2:8 - unnecessary_import
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre. Try replacing the use of the deprecated member with the replacement - lib\core\widgets\firestore_department_dropdown.dart:37:11 - deprecated_member_use
+warning - Unused import: 'package:hive_flutter/hive_flutter.dart'. Try removing the import directive - lib\data\local\hive_models_simple.dart:1:8 - unused_import
+   info - Use an initializing formal to assign a parameter to a field. Try using an initialing formal ('this._notifications') to initialize the field - lib\data\repositories\firebase_absence_repository.dart:19:9 - prefer_initializing_formals
+   info - Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' - lib\data\repositories\firebase_absence_repository.dart:77:7 - use_null_aware_elements
+warning - The '!' will have no effect because the receiver can't be null. Try removing the '!' operator - lib\data\repositories\firebase_absence_repository.dart:104:27 - unnecessary_non_null_assertion
+warning - The '!' will have no effect because the receiver can't be null. Try removing the '!' operator - lib\data\repositories\firebase_absence_repository.dart:183:27 - unnecessary_non_null_assertion
+   info - Use an initializing formal to assign a parameter to a field. Try using an initialing formal ('this._catalog') to initialize the field - lib\data\repositories\firebase_attendance_repository.dart:21:9 - prefer_initializing_formals
+   info - Use an initializing formal to assign a parameter to a field. Try using an initialing formal ('this._notifications') to initialize the field - lib\data\repositories\firebase_attendance_repository.dart:22:9 - prefer_initializing_formals
+warning - The value of the field '_catalog' isn't used. Try removing the field, or using it - lib\data\repositories\firebase_attendance_repository.dart:25:28 - unused_field
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\data\repositories\firebase_catalog_repository.dart:355:5 - avoid_print
+   info - Don't invoke 'print' in production code. Try using a logging framework - lib\data\repositories\firebase_catalog_repository.dart:360:5 - avoid_print
+   info - Use an initializing formal to assign a parameter to a field. Try using an initialing formal ('this._catalog') to initialize the field - lib\data\repositories\firebase_course_proposal_repository.dart:17:9 - prefer_initializing_formals
+   info - Use an initializing formal to assign a parameter to a field. Try using an initialing formal ('this._notifications') to initialize the field - lib\data\repositories\firebase_course_proposal_repository.dart:18:9 - prefer_initializing_formals
+warning - The '!' will have no effect because the receiver can't be null. Try removing the '!' operator - lib\data\repositories\firebase_course_proposal_repository.dart:51:38 - unnecessary_non_null_assertion
+warning - The '!' will have no effect because the receiver can't be null. Try removing the '!' operator - lib\data\repositories\firebase_course_proposal_repository.dart:174:27 - unnecessary_non_null_assertion
+warning - The '!' will have no effect because the receiver can't be null. Try removing the '!' operator - lib\data\repositories\firebase_course_proposal_repository.dart:214:27 - unnecessary_non_null_assertion
+warning - Dead code. Try removing the code, or fixing the code before it so that it can be reached - lib\data\repositories\hybrid_enrollment_repository.dart:47:70 - dead_code
+warning - The left operand can't be null, so the right operand is never executed. Try removing the operator and the right operand - lib\data\repositories\hybrid_enrollment_repository.dart:47:73 - dead_null_aware_expression
+   info - 'Share' is deprecated and shouldn't be used. Use SharePlus instead. Try replacing the use of the deprecated member with the replacement - lib\data\services\report_export_service.dart:110:13 - deprecated_member_use
+   info - 'shareXFiles' is deprecated and shouldn't be used. Use SharePlus.instance.share() instead. Try replacing the use of the deprecated member with the replacement - lib\data\services\report_export_service.dart:110:19 - deprecated_member_use
+   info - 'Share' is deprecated and shouldn't be used. Use SharePlus instead. Try replacing the use of the deprecated member with the replacement - lib\data\services\report_export_service.dart:120:13 - deprecated_member_use
+   info - 'shareXFiles' is deprecated and shouldn't be used. Use SharePlus.instance.share() instead. Try replacing the use of the deprecated member with the replacement - lib\data\services\report_export_service.dart:120:19 - deprecated_member_use
+   info - 'Table.fromTextArray' is deprecated and shouldn't be used. Use TableHelper.fromTextArray() instead. Try replacing the use of the deprecated member with the replacement - lib\data\services\report_export_service.dart:236:11 - deprecated_member_use
+   info - 'Table.fromTextArray' is deprecated and shouldn't be used. Use TableHelper.fromTextArray() instead. Try replacing the use of the deprecated member with the replacement - lib\data\services\report_export_service.dart:242:11 - deprecated_member_use
+   info - 'Table.fromTextArray' is deprecated and shouldn't be used. Use TableHelper.fromTextArray() instead. Try replacing the use of the deprecated member with the replacement - lib\data\services\report_export_service.dart:251:11 - deprecated_member_use
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:83:39 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:84:44 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:85:45 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:86:48 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:89:22 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:93:22 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:95:47 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:98:22 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:100:45 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:103:22 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\router\app_router.dart:107:22 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\screens\admin\admin_courses_screen.dart:40:43 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\screens\admin\admin_dashboard_screen.dart:46:18 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\screens\admin\admin_pending_courses_screen.dart:27:33 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\screens\lecturer\lecturer_absence_inbox_screen.dart:39:37 - unnecessary_underscores
+warning - Dead code. Try removing the code, or fixing the code before it so that it can be reached - lib\presentation\screens\lecturer\lecturer_courses_screen.dart:25:53 - dead_code
+warning - The left operand can't be null, so the right operand is never executed. Try removing the operator and the right operand - lib\presentation\screens\lecturer\lecturer_courses_screen.dart:25:56 - dead_null_aware_expression
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\screens\lecturer\lecturer_courses_screen.dart:168:43 - unnecessary_underscores
+   info - 'surfaceVariant' is deprecated and shouldn't be used. Use surfaceContainerHighest instead. This feature was deprecated after v3.18.0-0.1.pre. Try replacing the use of the deprecated member with the replacement - lib\presentation\screens\lecturer\lecturer_courses_screen.dart:177:65 - deprecated_member_use
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\screens\lecturer\lecturer_sessions_screen.dart:34:35 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\widgets\notifications_panel.dart:58:33 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\presentation\widgets\notifications_panel.dart:133:18 - unnecessary_underscores
+
+flutter : 48 issues found. (ran in 5.5s)
+At line:1 char:1
++ flutter analyze --no-pub 2>&1 | Out-File -FilePath analysis_out.txt - ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (48 issues found. (ran in 5.5s):St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        (
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+          )
+        );
+    }
+
+    function isLecturer() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/lecturers/$(request.auth.uid));
+    }
+
+    function isStudent() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/students/$(request.auth.uid));
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isSignedIn() && isOwner(uid) &&
+        request.resource.data.keys().hasAll(['name', 'email', 'department', 'role', 'roleId', 'createdAt']) &&
+        request.resource.data.role in ['student', 'lecturer'] &&
+        request.resource.data.roleId is string &&
+        request.resource.data.roleId.size() > 0;
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /departments/{id} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /courses/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /course_proposals/{id} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.lecturerId == request.auth.uid
+      );
+      allow create: if isLecturer() &&
+        request.resource.data.lecturerId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{id} {
+      allow read: if isSignedIn() &&
+        resource.data.recipientId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() &&
+        resource.data.recipientId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    match /admins/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if isAdmin();
+    }
+
+    match /students/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin() || isLecturer());
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isAdmin() || request.auth.uid == uid;
+      allow delete: if isAdmin();
+    }
+
+    match /lecturers/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isAdmin() || request.auth.uid == uid;
+      allow delete: if isAdmin();
+    }
+
+    match /attendance_sessions/{id} {
+      allow read: if isSignedIn();
+      allow create: if isLecturer();
+      allow update: if isLecturer() && resource.data.lecturerId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    match /attendance_records/{id} {
+      allow read: if isSignedIn();
+      allow create: if isStudent() || isLecturer() || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /absence_requests/{id} {
+      allow read: if isSignedIn() && (
+        resource.data.studentId == request.auth.uid || isAdmin() || isLecturer()
+      );
+      allow create: if isStudent() && request.resource.data.studentId == request.auth.uid;
+      allow update: if isAdmin() || isLecturer();
+    }
+
+    match /security_logs/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+    }
+  }
+}

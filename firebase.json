@@ -1,0 +1,29 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "project-sams-f0086",
+          "appId": "1:390212331440:android:7467cf296c156a24e5d875",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "project-sams-f0086",
+          "configurations": {
+            "android": "1:390212331440:android:7467cf296c156a24e5d875",
+            "ios": "1:390212331440:ios:46851bf237df732fe5d875",
+            "web": "1:390212331440:web:5374e18c0a30c473e5d875"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}
