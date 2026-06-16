@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:smart_attendance/core/constants/app_constants.dart';
+import 'package:smart_attendance/data/local/local_database_service.dart';
 import 'package:smart_attendance/data/repositories/firebase_absence_repository.dart';
 import 'package:smart_attendance/data/repositories/firebase_attendance_repository.dart';
 import 'package:smart_attendance/data/repositories/firebase_auth_repository.dart';
@@ -146,11 +149,32 @@ final unreadNotificationCountProvider = StreamProvider.family<int, String>((
   return ref.read(notificationRepositoryProvider).watchUnreadCount(userId);
 });
 
-/// Live enrollment count for a student, streamed directly from Firestore.
+/// Enrollment count for the home screen greeting card.
+///
+/// Emits the local Hive count immediately (optimistic, so self-enrollments
+/// appear before background sync writes to Firestore), then streams the
+/// authoritative count from the Firestore student document's `courseIds`
+/// field (which admin writes also update in real time).
 final studentEnrollmentCountProvider =
-    StreamProvider.autoDispose.family<int, String>((ref, studentId) {
-  return ref
-      .read(enrollmentRepositoryProvider)
-      .watchEnrollmentsForStudent(studentId)
-      .map((list) => list.length);
+    StreamProvider.autoDispose.family<int, String>((ref, studentId) async* {
+  // Optimistic seed: Hive is updated immediately on self-enroll.
+  try {
+    final hiveStudent = LocalDatabaseService.studentsBox.get(studentId);
+    if (hiveStudent != null) {
+      yield hiveStudent.courseIds.length;
+    }
+  } catch (_) {
+    // Box not ready — skip the optimistic seed and wait for Firestore.
+  }
+
+  // Authoritative stream: single source of truth for both self-enrolled
+  // and admin-assigned courses.
+  yield* FirebaseFirestore.instanceFor(app: Firebase.app())
+      .collection(AppConstants.studentsCollection)
+      .doc(studentId)
+      .snapshots()
+      .map((doc) {
+        final ids = doc.data()?['courseIds'];
+        return ids is List ? ids.length : 0;
+      });
 });

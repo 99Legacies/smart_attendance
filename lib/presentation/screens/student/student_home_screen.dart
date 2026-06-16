@@ -1,12 +1,33 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:smart_attendance/core/constants/app_constants.dart';
 import 'package:smart_attendance/core/theme/app_theme.dart';
 import 'package:smart_attendance/domain/entities/attendance_status.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
 import 'package:smart_attendance/presentation/widgets/design_system/app_card.dart';
+
+/// Streams name + enrolled course count directly from the students/{uid}
+/// document — the canonical target that admin enrollment writes to.
+/// This ensures the greeting card stays in sync with any admin-side change
+/// without depending on the separate enrollments collection.
+final _studentLiveDataProvider =
+    StreamProvider.autoDispose.family<({String? name, int courseCount}), String>(
+  (ref, uid) => FirebaseFirestore.instance
+      .collection(AppConstants.studentsCollection)
+      .doc(uid)
+      .snapshots()
+      .map((doc) {
+        final data = doc.data();
+        return (
+          name: data?['name'] as String?,
+          courseCount: (data?['courseIds'] as List? ?? []).length,
+        );
+      }),
+);
 
 /// Computes attendance rate (0.0–1.0) from all records for the student.
 final _studentAttendanceRateProvider =
@@ -109,12 +130,16 @@ class StudentHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authStateProvider).value;
-    final name = user?.name ?? 'Student';
-    final dept = user?.department ?? 'Student';
+    final live = ref.watch(_studentLiveDataProvider(studentUid)).asData?.value;
+    final authUser = ref.watch(authStateProvider).asData?.value;
 
-    final enrollCount =
-        ref.watch(studentEnrollmentCountProvider(studentUid));
+    // Live Firestore name takes priority — auth-state name may be null/empty
+    // when the profile fetch timed out during login.
+    final name = (live?.name?.isNotEmpty == true)
+        ? live!.name!
+        : (authUser?.name?.isNotEmpty == true ? authUser!.name! : 'Student');
+    final dept = authUser?.department ?? '—';
+
     final attendanceRate =
         ref.watch(_studentAttendanceRateProvider(studentUid));
 
@@ -223,11 +248,9 @@ class StudentHomeScreen extends ConsumerWidget {
                     Expanded(
                       child: _MiniMetric(
                         label: 'Courses',
-                        value: enrollCount.when(
-                          data: (n) => '$n enrolled',
-                          loading: () => '…',
-                          error: (_, _) => '—',
-                        ),
+                        value: live != null
+                            ? '${live.courseCount} enrolled'
+                            : '…',
                         color: AppTheme.primary,
                       ),
                     ),
