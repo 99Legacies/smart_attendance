@@ -6,11 +6,17 @@ class DepartmentModel extends Department {
 
   factory DepartmentModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data()! as Map<String, dynamic>;
+    // Prefer the stored departmentId field; fall back to doc.id for documents
+    // that pre-date the backfill migration.
+    final storedId = data['departmentId'] as String?;
     return DepartmentModel(
-      id: doc.id,
+      id: (storedId != null && storedId.isNotEmpty) ? storedId : doc.id,
       name: data['name'] as String? ?? '',
     );
   }
 
-  Map<String, dynamic> toFirestore() => {'name': name};
+  Map<String, dynamic> toFirestore() => {
+        'name': name,
+        'departmentId': id,
+      };
 }

@@ -6,6 +6,7 @@ import 'package:smart_attendance/domain/entities/course.dart';
 import 'package:smart_attendance/domain/entities/department.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
 import 'package:smart_attendance/presentation/widgets/create_course_dialog.dart';
+import 'package:smart_attendance/presentation/widgets/design_system/ap_loading.dart';
 
 class AdminCoursesScreen extends ConsumerStatefulWidget {
   const AdminCoursesScreen({super.key});
@@ -32,9 +33,10 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
               Expanded(
                 child: departmentsAsync.when(
                   data: (deps) => DropdownButtonFormField<String?>(
-                    value: _selectedDepartmentId,
+                    initialValue: _selectedDepartmentId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
-                      labelText: 'Filter by department',
+                      labelText: 'Department',
                       prefixIcon: Icon(Icons.filter_list),
                       isDense: true,
                     ),
@@ -46,7 +48,10 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
                       ...deps.map(
                         (d) => DropdownMenuItem(
                           value: d.id,
-                          child: Text(d.name),
+                          child: Text(
+                            d.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
                     ],
@@ -91,7 +96,7 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
                 return departmentsAsync.when(
                   data: (deps) => ListView.separated(
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
                       final c = filtered[i];
                       final deptName = c.allowsAllDepartments
@@ -117,13 +122,11 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
                       );
                     },
                   ),
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
+                  loading: () => const ApLoadingList(),
                   error: (e, _) => Center(child: Text('$e')),
                 );
               },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const ApLoadingList(),
               error: (e, _) => Center(child: Text('$e')),
             ),
           ),

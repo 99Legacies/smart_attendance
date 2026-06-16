@@ -50,7 +50,7 @@ class _ApBackgroundState extends State<ApBackground>
           if (widget.showOrbs)
             AnimatedBuilder(
               animation: _controller,
-              builder: (_, __) => CustomPaint(
+              builder: (_, _) => CustomPaint(
                 painter: _OrbPainter(
                   progress: _controller.value,
                   isDark: isDark,

@@ -55,7 +55,7 @@ class NotificationsPanel extends ConsumerWidget {
         return ListView.separated(
           padding: AppTheme.screenPadding,
           itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
           itemBuilder: (_, i) {
             final n = items[i];
             return AppCard(
@@ -98,7 +98,21 @@ class NotificationsPanel extends ConsumerWidget {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      error: (e, _) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.notifications_off_outlined, size: 48),
+            const SizedBox(height: 12),
+            const Text('Could not load notifications'),
+            const SizedBox(height: 4),
+            const Text(
+              'Please check your connection and try again.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -130,7 +144,7 @@ class NotificationBadgeIcon extends ConsumerWidget {
         icon: const Icon(Icons.notifications_outlined),
         onPressed: onTap,
       ),
-      error: (_, __) => IconButton(
+      error: (_, _) => IconButton(
         icon: const Icon(Icons.notifications_outlined),
         onPressed: onTap,
       ),

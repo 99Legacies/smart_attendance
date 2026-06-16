@@ -11,11 +11,9 @@ import 'package:smart_attendance/domain/repositories/notification_repository.dar
 class FirebaseCourseProposalRepository implements CourseProposalRepository {
   FirebaseCourseProposalRepository({
     FirebaseFirestore? firestore,
-    CatalogRepository? catalog,
-    NotificationRepository? notifications,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _catalog = catalog,
-        _notifications = notifications;
+    this._catalog,
+    this._notifications,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
   final CatalogRepository? _catalog;
@@ -48,7 +46,7 @@ class FirebaseCourseProposalRepository implements CourseProposalRepository {
     }
 
     if (_catalog != null) {
-      final existing = await _catalog!.findCourseByCode(code);
+      final existing = await _catalog.findCourseByCode(code);
       if (existing != null) {
         throw const AppException(
           'A course with this ID already exists.',
@@ -133,11 +131,15 @@ class FirebaseCourseProposalRepository implements CourseProposalRepository {
       );
     }
 
+    final allowedDepts = proposal.departmentId.isNotEmpty
+        ? [proposal.departmentId]
+        : <String>[];
     final courseRef = await _firestore
         .collection(AppConstants.coursesCollection)
         .add({
       'name': proposal.name,
       'departmentId': proposal.departmentId,
+      'allowedDepartmentIds': allowedDepts,
       'courseCode': proposal.proposedCourseId,
       'description': proposal.description,
       'createdBy': proposal.lecturerId,
@@ -171,7 +173,7 @@ class FirebaseCourseProposalRepository implements CourseProposalRepository {
     await batch.commit();
 
     if (_notifications != null) {
-      await _notifications!.send(
+      await _notifications.send(
         recipientId: proposal.lecturerId,
         type: NotificationType.courseProposalApproved,
         title: 'Course approved',
@@ -211,7 +213,7 @@ class FirebaseCourseProposalRepository implements CourseProposalRepository {
     });
 
     if (_notifications != null) {
-      await _notifications!.send(
+      await _notifications.send(
         recipientId: proposal.lecturerId,
         type: NotificationType.courseProposalRejected,
         title: 'Course proposal declined',

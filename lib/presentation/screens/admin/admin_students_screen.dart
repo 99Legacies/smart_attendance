@@ -4,6 +4,7 @@ import 'package:smart_attendance/core/theme/app_theme.dart';
 import 'package:smart_attendance/core/widgets/app_card.dart';
 import 'package:smart_attendance/domain/entities/student.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
+import 'package:smart_attendance/presentation/widgets/design_system/ap_loading.dart';
 
 class AdminStudentsScreen extends ConsumerWidget {
   const AdminStudentsScreen({super.key});
@@ -38,7 +39,7 @@ class AdminStudentsScreen extends ConsumerWidget {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ApLoadingList(),
         error: (e, _) => Center(child: Text('$e')),
       ),
     );

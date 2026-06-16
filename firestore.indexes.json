@@ -1,20 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "lecturers",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "lecturerId", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "students",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "studentId", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "attendance_sessions",
       "queryScope": "COLLECTION",
       "fields": [
@@ -47,9 +33,10 @@
       ]
     },
     {
-      "collectionGroup": "users",
+      "collectionGroup": "absence_requests",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
@@ -86,18 +73,11 @@
       ]
     },
     {
-      "collectionGroup": "absence_requests",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "courses",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "courseCode", "order": "ASCENDING" }
+        { "fieldPath": "allowedDepartmentIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "name", "order": "ASCENDING" }
       ]
     }
   ],

@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smart_attendance/core/constants/app_constants.dart';
 import 'package:smart_attendance/core/constants/preset_departments.dart';
@@ -64,9 +66,10 @@ class FirebaseCatalogRepository implements CatalogRepository {
 
   @override
   Future<void> createDepartment(String name) async {
-    await _firestore.collection(AppConstants.departmentsCollection).add({
-      'name': name.trim(),
-    });
+    // Pre-generate a document reference so we can include departmentId in the
+    // initial write (a single atomic set instead of add + update).
+    final ref = _firestore.collection(AppConstants.departmentsCollection).doc();
+    await ref.set({'name': name.trim(), 'departmentId': ref.id});
   }
 
   @override
@@ -74,7 +77,7 @@ class FirebaseCatalogRepository implements CatalogRepository {
     await _firestore
         .collection(AppConstants.departmentsCollection)
         .doc(id)
-        .update({'name': name.trim()});
+        .update({'name': name.trim(), 'departmentId': id});
   }
 
   @override
@@ -96,9 +99,8 @@ class FirebaseCatalogRepository implements CatalogRepository {
     if (existing.docs.isNotEmpty) {
       return existing.docs.first.id;
     }
-    final ref = await _firestore
-        .collection(AppConstants.departmentsCollection)
-        .add({'name': trimmed});
+    final ref = _firestore.collection(AppConstants.departmentsCollection).doc();
+    await ref.set({'name': trimmed, 'departmentId': ref.id});
     return ref.id;
   }
 
@@ -112,9 +114,9 @@ class FirebaseCatalogRepository implements CatalogRepository {
           .limit(1)
           .get();
       if (existing.docs.isEmpty) {
-        await _firestore.collection(AppConstants.departmentsCollection).add({
-          'name': deptName,
-        });
+        final ref =
+            _firestore.collection(AppConstants.departmentsCollection).doc();
+        await ref.set({'name': deptName, 'departmentId': ref.id});
         created++;
       }
     }
@@ -352,12 +354,15 @@ class FirebaseCatalogRepository implements CatalogRepository {
 
   @override
   Future<Lecturer?> getLecturer(String uid) async {
-    print('getLecturer uid: $uid');
+    developer.log('getLecturer uid: $uid', name: 'FirebaseCatalog');
     final doc = await _firestore
         .collection(AppConstants.lecturersCollection)
         .doc(uid)
         .get();
-    print('doc.exists: ${doc.exists}, doc.id: ${doc.id}');
+    developer.log(
+      'getLecturer doc.exists=${doc.exists}, doc.id=${doc.id}',
+      name: 'FirebaseCatalog',
+    );
     if (!doc.exists) return null;
     return LecturerModel.fromFirestore(doc);
   }

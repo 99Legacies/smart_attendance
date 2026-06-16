@@ -35,7 +35,7 @@ class ApAppBar extends StatelessWidget implements PreferredSizeWidget {
       automaticallyImplyLeading: automaticallyImplyLeading,
       backgroundColor: Theme.of(
         context,
-      ).scaffoldBackgroundColor.withOpacity(isDark ? 0.22 : 0.88),
+      ).scaffoldBackgroundColor.withValues(alpha: isDark ? 0.22 : 0.88),
       foregroundColor: theme.foregroundColor,
       elevation: 0,
       scrolledUnderElevation: theme.scrolledUnderElevation,

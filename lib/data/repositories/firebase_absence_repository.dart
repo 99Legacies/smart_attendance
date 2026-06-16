@@ -13,10 +13,9 @@ class FirebaseAbsenceRepository implements AbsenceRepository {
   FirebaseAbsenceRepository({
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
-    NotificationRepository? notifications,
+    this._notifications,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _storage = storage ?? FirebaseStorage.instance,
-        _notifications = notifications;
+        _storage = storage ?? FirebaseStorage.instance;
 
   final FirebaseFirestore _firestore;
   final FirebaseStorage _storage;
@@ -77,7 +76,7 @@ class FirebaseAbsenceRepository implements AbsenceRepository {
       'reason': reason.trim(),
       'createdAt': FieldValue.serverTimestamp(),
       'status': AbsenceRequestStatus.pending.name,
-      if (fileUrl != null) 'fileUrl': fileUrl,
+      'fileUrl': ?fileUrl,
     });
 
     await _notifyLecturersForCourse(
@@ -104,7 +103,7 @@ class FirebaseAbsenceRepository implements AbsenceRepository {
         .get();
 
     for (final doc in lecturers.docs) {
-      await _notifications!.send(
+      await _notifications.send(
         recipientId: doc.id,
         type: NotificationType.absenceSubmitted,
         title: 'New absence request',
@@ -120,9 +119,11 @@ class FirebaseAbsenceRepository implements AbsenceRepository {
   Stream<List<AbsenceRequest>> watchRequestsForStudent(String studentId) {
     return _requests
         .where('studentId', isEqualTo: studentId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map(_fromDoc).toList());
+        .map(
+          (snap) => snap.docs.map(_fromDoc).toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+        );
   }
 
   @override
@@ -135,14 +136,14 @@ class FirebaseAbsenceRepository implements AbsenceRepository {
 
     return _requests
         .where('status', isEqualTo: AbsenceRequestStatus.pending.name)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) {
           final courseSet = courseIds.toSet();
           return snap.docs
               .map(_fromDoc)
               .where((r) => courseSet.contains(r.courseId))
-              .toList();
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         });
   }
 
@@ -213,7 +214,7 @@ class FirebaseAbsenceRepository implements AbsenceRepository {
     // Send notification to student
     if (_notifications != null) {
       final approved = status == AbsenceRequestStatus.approved;
-      await _notifications!.send(
+      await _notifications.send(
         recipientId: request.studentId,
         type: NotificationType.absenceReviewed,
         title: approved ? 'Absence approved' : 'Absence declined',

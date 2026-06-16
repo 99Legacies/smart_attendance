@@ -24,6 +24,8 @@ class AuthController extends Notifier<AsyncValue<void>> {
       final deviceId = await ref.read(deviceServiceProvider).getDeviceId();
       final repo = ref.read(authRepositoryProvider);
 
+      // Repository methods must fully await all Firestore writes before
+      // returning — do NOT set data until the entire write pipeline completes.
       if (role == UserRole.student) {
         await repo.registerStudent(
           fullName: fullName,
@@ -50,6 +52,9 @@ class AuthController extends Notifier<AsyncValue<void>> {
         );
       }
 
+      // Only set data AFTER all Firestore writes have fully completed.
+      // This prevents GoRouter's refreshListenable from firing mid-write
+      // and interrupting the Firestore document creation.
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);

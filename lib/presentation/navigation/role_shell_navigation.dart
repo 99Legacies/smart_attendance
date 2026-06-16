@@ -9,14 +9,14 @@ class RoleShellNavigation {
   final String logTag;
   int _selectedIndex = 0;
   UserRole? _activeRole;
+  int? _lastLoggedIndex;
+  int? _lastLoggedLength;
+  UserRole? _lastLoggedRole;
 
   int get selectedIndex => _selectedIndex;
 
   /// Call on every build before using [selectedIndex] or page lists.
-  int resolve({
-    required UserRole role,
-    required List<RoleNavItem> navItems,
-  }) {
+  int resolve({required UserRole role, required List<RoleNavItem> navItems}) {
     final length = navItems.length;
 
     if (_activeRole != role) {
@@ -44,10 +44,7 @@ class RoleShellNavigation {
       }
     }
 
-    debugPrint(
-      '[$logTag] selectedIndex=$_selectedIndex navItems.length=$length '
-      'role=${role.name}',
-    );
+    _logStateIfChanged(role: role, length: length);
     return _selectedIndex;
   }
 
@@ -59,6 +56,23 @@ class RoleShellNavigation {
     }
     debugPrint(
       '[$logTag] select -> $_selectedIndex (requested $index, length $length)',
+    );
+  }
+
+  void _logStateIfChanged({required UserRole role, required int length}) {
+    if (_lastLoggedIndex == _selectedIndex &&
+        _lastLoggedLength == length &&
+        _lastLoggedRole == role) {
+      return;
+    }
+
+    _lastLoggedIndex = _selectedIndex;
+    _lastLoggedLength = length;
+    _lastLoggedRole = role;
+
+    debugPrint(
+      '[$logTag] selectedIndex=$_selectedIndex navItems.length=$length '
+      'role=${role.name}',
     );
   }
 

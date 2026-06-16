@@ -62,4 +62,12 @@ class AuthUser {
   final UserRole role;
   final String? name;
   final String? department;
+
+  bool sameIdentity(AuthUser other) {
+    return uid == other.uid &&
+        email == other.email &&
+        role == other.role &&
+        name == other.name &&
+        department == other.department;
+  }
 }

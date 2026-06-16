@@ -132,12 +132,22 @@ class MarkAttendanceUseCase {
   }
 
   Future<void> _validateDevice(Student student, String deviceId) async {
-    if (student.deviceId != null && student.deviceId != deviceId) {
+    final storedDevice = student.deviceId;
+    if (storedDevice != null && storedDevice != deviceId) {
+      // Skip device mismatch for web devices — web IDs change per browser/session
+      // and are not reliable for device enforcement
+      final isWebDevice = storedDevice.startsWith('web-') ||
+          deviceId.startsWith('web-') ||
+          storedDevice == 'unknown-device' ||
+          deviceId == 'unknown-device';
+
+      if (isWebDevice) return; // Allow web logins without mismatch error
+
       await _log(
         student.id,
         'device_mismatch',
         null,
-        'Registered: ${student.deviceId}, Attempt: $deviceId',
+        'Registered: $storedDevice, Attempt: $deviceId',
       );
       throw const AppException(
         'This account is registered on another device. '

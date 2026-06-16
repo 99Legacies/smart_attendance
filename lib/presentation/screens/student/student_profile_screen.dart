@@ -204,7 +204,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                         radius: 48,
                         child: CircularProgressIndicator(),
                       ),
-                      error: (_, __) => CircleAvatar(
+                      error: (_, _) => CircleAvatar(
                         radius: 48,
                         child: Text(
                           student.name.isNotEmpty
@@ -314,7 +314,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                             .where((c) => student.courseIds.contains(c.id))
                             .toList();
                         return DropdownButtonFormField<String>(
-                          value: _selectedCourseId,
+                          initialValue: _selectedCourseId,
                           decoration: const InputDecoration(
                             labelText: 'Course',
                           ),
@@ -331,7 +331,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                         );
                       },
                       loading: () => const LinearProgressIndicator(),
-                      error: (e, st) => Text('$e'),
+                      error: (_, _) => const Text(
+                        'Could not load courses. Please try again.',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -406,7 +408,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                         );
                       },
                       loading: () => const LinearProgressIndicator(),
-                      error: (e, st) => Text('$e'),
+                      error: (_, _) => const Text(
+                        'Could not load absence requests.',
+                      ),
                     ),
                   ],
                 ),
@@ -415,7 +419,18 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Text('Error: $e'),
+        error: (_, _) => const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.person_off_outlined, size: 48),
+              SizedBox(height: 12),
+              Text('Could not load your profile.'),
+              SizedBox(height: 4),
+              Text('Please check your connection and try again.'),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -439,7 +454,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 }
 
 final _studentProvider = FutureProvider.family<Student?, String>((ref, uid) {
-  return ref.watch(catalogRepositoryProvider).getStudent(uid);
+  return ref.read(catalogRepositoryProvider).getStudent(uid).timeout(
+    const Duration(seconds: 8),
+    onTimeout: () => null,
+  );
 });
 
 final _departmentsProvider = StreamProvider<List<Department>>((ref) {

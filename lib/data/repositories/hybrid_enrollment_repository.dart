@@ -1,5 +1,7 @@
 import 'dart:developer' as developer;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:uuid/uuid.dart';
 import 'package:smart_attendance/core/constants/app_constants.dart';
 import 'package:smart_attendance/data/local/local_enrollment_data_source.dart';
@@ -44,7 +46,7 @@ class HybridEnrollmentRepository implements EnrollmentRepository {
     await _local.saveEnrollment(enrollment);
 
     // Update student's course list locally
-    final updatedCourseIds = List<String>.from(hiveStudent.courseIds ?? []);
+    final updatedCourseIds = List<String>.from(hiveStudent.courseIds);
     updatedCourseIds.add(courseId);
     // Build updated HiveStudent using existing fields
     final newHive = HiveStudent(
@@ -96,5 +98,23 @@ class HybridEnrollmentRepository implements EnrollmentRepository {
   @override
   Future<List<Enrollment>> getEnrollmentsForStudent(String studentId) async {
     return _local.getEnrollmentsForStudent(studentId);
+  }
+
+  @override
+  Stream<List<Enrollment>> watchEnrollmentsForStudent(String studentId) {
+    return FirebaseFirestore.instanceFor(app: Firebase.app())
+        .collection(AppConstants.enrollmentsCollection)
+        .where('studentId', isEqualTo: studentId)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) {
+              final data = d.data();
+              return Enrollment(
+                id: d.id,
+                studentId: data['studentId'] as String? ?? '',
+                courseId: data['courseId'] as String? ?? '',
+                createdAt:
+                    (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+              );
+            }).toList());
   }
 }

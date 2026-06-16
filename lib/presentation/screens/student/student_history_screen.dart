@@ -5,6 +5,7 @@ import 'package:smart_attendance/core/theme/app_theme.dart';
 import 'package:smart_attendance/core/widgets/app_card.dart';
 import 'package:smart_attendance/domain/entities/attendance_record.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
+import 'package:smart_attendance/presentation/widgets/design_system/ap_loading.dart';
 
 class StudentHistoryScreen extends ConsumerWidget {
   const StudentHistoryScreen({super.key, required this.studentUid});
@@ -43,8 +44,23 @@ class StudentHistoryScreen extends ConsumerWidget {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => const ApLoadingList(),
+        error: (e, _) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.history_toggle_off_outlined, size: 48),
+              const SizedBox(height: 12),
+              const Text('Could not load attendance history'),
+              const SizedBox(height: 4),
+              Text(
+                'Please check your connection and try again.',
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

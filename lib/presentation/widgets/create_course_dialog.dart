@@ -160,6 +160,7 @@ class _CreateCourseDialogState extends State<_CreateCourseDialog> {
               FirestoreDepartmentDropdown(
                 value: _departmentId,
                 onChanged: (v) => setState(() => _departmentId = v),
+                returnId: true,
               ),
               const SizedBox(height: 8),
               Text(

@@ -63,7 +63,7 @@ class ApLoadingList extends StatelessWidget {
     return ListView.builder(
       padding: AppTheme.screenPadding,
       itemCount: count,
-      itemBuilder: (_, __) => const ApSkeletonCard(),
+      itemBuilder: (_, _) => const ApSkeletonCard(),
     );
   }
 }

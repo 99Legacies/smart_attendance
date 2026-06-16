@@ -68,10 +68,10 @@ class AppTheme {
   );
 
   static Color glassFill(bool isDark) =>
-      isDark ? Colors.white.withOpacity(0.06) : Colors.white.withOpacity(0.72);
+      isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.72);
 
   static Color glassBorder(bool isDark) =>
-      isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.08);
+      isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.08);
 
   static BoxDecoration gradientBackground(bool isDark) {
     return BoxDecoration(
@@ -255,7 +255,7 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: isDark
-            ? surfaceVariant.withOpacity(0.6)
+            ? surfaceVariant.withValues(alpha: 0.6)
             : lightSurfaceVariant,
         floatingLabelBehavior: FloatingLabelBehavior.auto,
         contentPadding: const EdgeInsets.symmetric(
@@ -267,7 +267,7 @@ class AppTheme {
           fontWeight: FontWeight.w600,
         ),
         hintStyle: GoogleFonts.inter(
-          color: (isDark ? onSurface : lightOnSurface).withOpacity(0.5),
+          color: (isDark ? onSurface : lightOnSurface).withValues(alpha: 0.5),
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(borderRadius),

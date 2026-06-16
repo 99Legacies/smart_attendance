@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:smart_attendance/core/constants/preset_departments.dart';
 import 'package:smart_attendance/core/errors/app_exception.dart';
 import 'package:smart_attendance/core/theme/app_theme.dart';
 import 'package:smart_attendance/core/utils/snackbar_utils.dart';
 import 'package:smart_attendance/core/widgets/app_card.dart';
 import 'package:smart_attendance/domain/entities/app_user.dart';
+import 'package:smart_attendance/domain/entities/department.dart';
 import 'package:smart_attendance/domain/entities/user_role.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
 
@@ -173,6 +173,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
   @override
   Widget build(BuildContext context) {
     final usersAsync = ref.watch(usersProvider);
+    final departmentsAsync = ref.watch(_departmentsProvider);
 
     return Padding(
       padding: AppTheme.screenPadding,
@@ -201,26 +202,33 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              DropdownButtonFormField<String?>(
-                initialValue: _departmentFilter,
-                isExpanded: true, // prevents overflow
-                decoration: const InputDecoration(
-                  labelText: 'Department',
-                  isDense: true,
-                ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('All departments'),
+              departmentsAsync.when(
+                data: (departments) => DropdownButtonFormField<String?>(
+                  initialValue: _departmentFilter,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Department',
+                    isDense: true,
                   ),
-                  ...PresetDepartments.all.map(
-                    (d) => DropdownMenuItem<String?>(
-                      value: d,
-                      child: Text(d, overflow: TextOverflow.ellipsis),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('All departments'),
                     ),
-                  ),
-                ],
-                onChanged: (v) => setState(() => _departmentFilter = v),
+                    ...departments.map(
+                      (d) => DropdownMenuItem<String?>(
+                        value: d.name,
+                        child: Text(
+                          d.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => _departmentFilter = v),
+                ),
+                loading: () => const LinearProgressIndicator(),
+                error: (_, _) => const SizedBox.shrink(),
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<UserRole?>(
@@ -374,4 +382,8 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
 
 final usersProvider = StreamProvider<List<AppUser>>((ref) {
   return ref.watch(userRepositoryProvider).watchUsers();
+});
+
+final _departmentsProvider = StreamProvider<List<Department>>((ref) {
+  return ref.watch(catalogRepositoryProvider).watchDepartments();
 });

@@ -11,6 +11,7 @@ import 'package:smart_attendance/data/models/attendance_session_model.dart';
 import 'package:smart_attendance/domain/entities/attendance_record.dart';
 import 'package:smart_attendance/domain/entities/attendance_session.dart';
 import 'package:smart_attendance/domain/entities/course.dart';
+import 'package:smart_attendance/data/models/department_model.dart';
 import 'package:smart_attendance/domain/entities/department.dart';
 import 'package:smart_attendance/domain/entities/lecturer.dart';
 import 'package:smart_attendance/domain/entities/security_log.dart';
@@ -203,6 +204,7 @@ class _AdminSessionsDetailScreenState
   Widget build(BuildContext context) {
     final departmentsAsync = ref.watch(_departmentsProvider);
     final lecturersAsync = ref.watch(_lecturersProvider);
+    final coursesAsync = ref.watch(_coursesProvider);
     final sessionsAsync = ref.watch(_sessionsProvider);
 
     return Padding(
@@ -335,6 +337,10 @@ class _AdminSessionsDetailScreenState
                   data: (data) => data,
                   orElse: () => <Department>[],
                 );
+                final courses = coursesAsync.maybeWhen(
+                  data: (data) => data,
+                  orElse: () => <Course>[],
+                );
                 final visibleSessions = _filteredSessions(
                   sessions,
                   lecturers,
@@ -376,16 +382,25 @@ class _AdminSessionsDetailScreenState
                             );
                             final department = departments.firstWhere(
                               (item) => item.id == lecturer.departmentId,
-                              orElse: () => Department(
+                              orElse: () => const DepartmentModel(
                                 id: '',
                                 name: 'Unknown department',
                               ),
                             );
+                            final course = courses
+                                .where((c) => c.id == session.courseId)
+                                .firstOrNull;
+                            final courseLabel = course == null
+                                ? session.courseId
+                                : (course.courseCode != null &&
+                                        course.courseCode!.isNotEmpty
+                                    ? '${course.courseCode} — ${course.name}'
+                                    : course.name);
 
                             return AppCard(
                               child: ListTile(
                                 isThreeLine: true,
-                                title: Text(session.courseId),
+                                title: Text(courseLabel),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -399,27 +414,13 @@ class _AdminSessionsDetailScreenState
                                     ),
                                   ],
                                 ),
-                                trailing: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Chip(
-                                      label: Text(
-                                        session.isActive ? 'Active' : 'Closed',
-                                      ),
-                                      backgroundColor: session.isActive
-                                          ? Colors.green.withValues(alpha: 0.14)
-                                          : Colors.grey.withValues(alpha: 0.18),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      session.id,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                      textAlign: TextAlign.right,
-                                    ),
-                                  ],
+                                trailing: Chip(
+                                  label: Text(
+                                    session.isActive ? 'Active' : 'Closed',
+                                  ),
+                                  backgroundColor: session.isActive
+                                      ? Colors.green.withValues(alpha: 0.14)
+                                      : Colors.grey.withValues(alpha: 0.18),
                                 ),
                               ),
                             );
@@ -645,45 +646,14 @@ class AdminSecurityLogsScreen extends ConsumerWidget {
                                     ),
                                   ],
                                 ),
-                                trailing: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 112,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        _formatTimestamp(log.timestamp),
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall,
-                                        textAlign: TextAlign.right,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Chip(
-                                          label: Text(
-                                            log.action.toLowerCase().contains(
-                                                  'error',
-                                                )
-                                                ? 'Error'
-                                                : 'Event',
-                                          ),
-                                          backgroundColor:
-                                              log.action.toLowerCase().contains(
-                                                'error',
-                                              )
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.errorContainer
-                                              : Theme.of(context)
-                                                    .colorScheme
-                                                    .surfaceContainerHighest,
-                                        ),
-                                      ),
-                                    ],
+                                trailing: SizedBox(
+                                  width: 80,
+                                  child: Text(
+                                    _formatTimestamp(log.timestamp),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                    textAlign: TextAlign.right,
                                   ),
                                 ),
                               ),

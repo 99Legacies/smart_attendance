@@ -59,34 +59,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     setState(() => _error = null);
 
-    try {
-      await ref
-          .read(authControllerProvider.notifier)
-          .register(
-            fullName: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
-            department: _department!,
-            role: _role,
-            roleId: _roleIdController.text.trim(),
-          );
-
-      // Check if the controller ended in error state
-      final authState = ref.read(authControllerProvider);
-      if (authState is AsyncError) {
-        final err = authState.error;
-        setState(
-          () => _error = err is AppException ? err.message : err.toString(),
-        );
-        return;
-      }
-
-      if (!mounted) return;
-      SnackbarUtils.showSuccess(context, 'Account created successfully');
-      // Router handles navigation automatically via authStateChanges
-    } catch (e) {
-      setState(() => _error = e is AppException ? e.message : e.toString());
-    }
+    // Fire and forget — ref.listen in build() handles all error and success
+    // feedback reactively. Do NOT wrap in try/catch here as that causes
+    // double error handling and can show raw exceptions instead of friendly
+    // AppException messages.
+    await ref.read(authControllerProvider.notifier).register(
+      fullName: _nameController.text.trim(),
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+      department: _department!,
+      role: _role,
+      roleId: _roleIdController.text.trim(),
+    );
+    // Router handles navigation automatically via authStateChanges on success.
   }
 
   @override
@@ -94,12 +79,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final authState = ref.watch(authControllerProvider);
 
     // Listen for errors from the provider
-    ref.listen<AsyncValue<void>>(authControllerProvider, (_, next) {
+    // Single source of truth for auth feedback — handles both errors and
+    // success. Checking previous.isLoading ensures the snackbar only fires
+    // on an actual loading→data transition, not on the initial build.
+    ref.listen<AsyncValue<void>>(authControllerProvider, (previous, next) {
       if (next is AsyncError && mounted) {
         final err = next.error;
         setState(
           () => _error = err is AppException ? err.message : err.toString(),
         );
+      }
+      if (previous?.isLoading == true && next is AsyncData && mounted) {
+        SnackbarUtils.showSuccess(context, 'Account created successfully');
       }
     });
 

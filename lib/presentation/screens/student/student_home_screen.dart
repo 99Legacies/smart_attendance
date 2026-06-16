@@ -1,9 +1,88 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:smart_attendance/core/theme/app_theme.dart';
+import 'package:smart_attendance/domain/entities/attendance_status.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
 import 'package:smart_attendance/presentation/widgets/design_system/app_card.dart';
+
+/// Computes attendance rate (0.0–1.0) from all records for the student.
+final _studentAttendanceRateProvider =
+    StreamProvider.autoDispose.family<double, String>((ref, uid) {
+  return ref
+      .watch(attendanceRepositoryProvider)
+      .watchRecordsForStudent(uid)
+      .map((records) {
+    if (records.isEmpty) return 0.0;
+    final attended = records
+        .where(
+          (r) =>
+              r.status == AttendanceStatus.present ||
+              r.status == AttendanceStatus.late,
+        )
+        .length;
+    return attended / records.length;
+  });
+});
+
+class _SessionData {
+  const _SessionData({
+    required this.courseName,
+    required this.timestamp,
+    required this.status,
+  });
+  final String courseName;
+  final DateTime timestamp;
+  final AttendanceStatus status;
+}
+
+final _studentRecentSessionsProvider =
+    StreamProvider.autoDispose.family<List<_SessionData>, String>((ref, uid) async* {
+  final attendance = ref.read(attendanceRepositoryProvider);
+  final catalog = ref.read(catalogRepositoryProvider);
+
+  // Load enrolled course IDs once for filtering (Hive-first, works offline)
+  final student = await catalog.getStudent(uid).timeout(
+    const Duration(seconds: 8),
+    onTimeout: () => null,
+  );
+  final enrolledIds = student?.courseIds.toSet() ?? const <String>{};
+
+  await for (final records in attendance.watchRecordsForStudent(uid)) {
+    // Records are already sorted newest-first by watchRecordsForStudent
+    final filtered = enrolledIds.isEmpty
+        ? records.take(5).toList()
+        : records
+            .where((r) => r.courseId != null && enrolledIds.contains(r.courseId))
+            .take(5)
+            .toList();
+
+    // Parallel course name lookups with per-request timeout
+    final sessions = await Future.wait(
+      filtered.map((record) async {
+        var courseName = 'Unknown Course';
+        if (record.courseId != null && record.courseId!.isNotEmpty) {
+          try {
+            final course = await catalog.getCourse(record.courseId!).timeout(
+              const Duration(seconds: 5),
+              onTimeout: () => null,
+            );
+            if (course != null) courseName = course.name;
+          } catch (_) {}
+        }
+        return _SessionData(
+          courseName: courseName,
+          timestamp: record.timestamp,
+          status: record.status,
+        );
+      }),
+    );
+
+    yield sessions;
+  }
+});
 
 class StudentHomeScreen extends ConsumerWidget {
   const StudentHomeScreen({
@@ -12,12 +91,14 @@ class StudentHomeScreen extends ConsumerWidget {
     required this.onScan,
     required this.onHistory,
     required this.onProfile,
+    required this.onCourses,
   });
 
   final String studentUid;
   final VoidCallback onScan;
   final VoidCallback onHistory;
   final VoidCallback onProfile;
+  final VoidCallback onCourses;
 
   String _greeting() {
     final hour = DateTime.now().hour;
@@ -31,6 +112,11 @@ class StudentHomeScreen extends ConsumerWidget {
     final user = ref.watch(authStateProvider).value;
     final name = user?.name ?? 'Student';
     final dept = user?.department ?? 'Student';
+
+    final enrollCount =
+        ref.watch(studentEnrollmentCountProvider(studentUid));
+    final attendanceRate =
+        ref.watch(_studentAttendanceRateProvider(studentUid));
 
     return SingleChildScrollView(
       padding: AppTheme.screenPadding,
@@ -48,7 +134,7 @@ class StudentHomeScreen extends ConsumerWidget {
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundColor: AppTheme.primary.withOpacity(0.22),
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.22),
                           child: Text(
                             name.isNotEmpty ? name[0].toUpperCase() : 'S',
                             style: const TextStyle(
@@ -87,7 +173,7 @@ class StudentHomeScreen extends ConsumerWidget {
                                 ?.copyWith(
                                   color: Theme.of(
                                     context,
-                                  ).colorScheme.onSurface.withOpacity(0.75),
+                                  ).colorScheme.onSurface.withValues(alpha: 0.75),
                                 ),
                           ),
                           const SizedBox(height: 4),
@@ -102,7 +188,7 @@ class StudentHomeScreen extends ConsumerWidget {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: AppTheme.secondary.withOpacity(0.14),
+                              color: AppTheme.secondary.withValues(alpha: 0.14),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -125,7 +211,11 @@ class StudentHomeScreen extends ConsumerWidget {
                     Expanded(
                       child: _MiniMetric(
                         label: 'Attendance',
-                        value: '82%',
+                        value: attendanceRate.when(
+                          data: (r) => '${(r * 100).round()}%',
+                          loading: () => '—',
+                          error: (_, _) => '—',
+                        ),
                         color: AppTheme.secondary,
                       ),
                     ),
@@ -133,7 +223,11 @@ class StudentHomeScreen extends ConsumerWidget {
                     Expanded(
                       child: _MiniMetric(
                         label: 'Courses',
-                        value: '4 enrolled',
+                        value: enrollCount.when(
+                          data: (n) => '$n enrolled',
+                          loading: () => '…',
+                          error: (_, _) => '—',
+                        ),
                         color: AppTheme.primary,
                       ),
                     ),
@@ -148,10 +242,10 @@ class StudentHomeScreen extends ConsumerWidget {
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.05,
+            crossAxisCount: kIsWeb ? 4 : 2,
+            mainAxisSpacing: kIsWeb ? 8 : 12,
+            crossAxisSpacing: kIsWeb ? 8 : 12,
+            childAspectRatio: kIsWeb ? 2.5 : 1.05,
             children: [
               _QuickAction(
                 icon: Icons.qr_code_scanner_rounded,
@@ -159,6 +253,7 @@ class StudentHomeScreen extends ConsumerWidget {
                 gradient: AppTheme.primaryGradient,
                 onTap: onScan,
                 delay: 0,
+                compact: kIsWeb,
               ),
               _QuickAction(
                 icon: Icons.history_rounded,
@@ -168,6 +263,7 @@ class StudentHomeScreen extends ConsumerWidget {
                 ),
                 onTap: onHistory,
                 delay: 50,
+                compact: kIsWeb,
               ),
               _QuickAction(
                 icon: Icons.person_outline_rounded,
@@ -175,6 +271,7 @@ class StudentHomeScreen extends ConsumerWidget {
                 gradient: AppTheme.successGradient,
                 onTap: onProfile,
                 delay: 100,
+                compact: kIsWeb,
               ),
               _QuickAction(
                 icon: Icons.school_outlined,
@@ -182,8 +279,9 @@ class StudentHomeScreen extends ConsumerWidget {
                 gradient: const LinearGradient(
                   colors: [Color(0xFFF59E0B), Color(0xFFF43F5E)],
                 ),
-                onTap: onProfile,
+                onTap: onCourses,
                 delay: 150,
+                compact: kIsWeb,
               ),
             ],
           ),
@@ -193,96 +291,98 @@ class StudentHomeScreen extends ConsumerWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 148,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemBuilder: (context, index) {
-                final sessions = [
-                  {
-                    'title': 'CS 101',
-                    'subtitle': '09:00 • Guest Lecture',
-                    'status': 'Present',
-                    'color': AppTheme.secondary,
-                  },
-                  {
-                    'title': 'Math 201',
-                    'subtitle': '11:00 • Algebra',
-                    'status': 'Late',
-                    'color': AppTheme.warning,
-                  },
-                  {
-                    'title': 'Bio 110',
-                    'subtitle': '13:00 • Lab',
-                    'status': 'Absent',
-                    'color': AppTheme.absent,
-                  },
-                  {
-                    'title': 'Eng 302',
-                    'subtitle': '15:00 • Seminar',
-                    'status': 'Present',
-                    'color': AppTheme.secondary,
-                  },
-                  {
-                    'title': 'Hist 120',
-                    'subtitle': '17:00 • Review',
-                    'status': 'Present',
-                    'color': AppTheme.secondary,
-                  },
-                ];
-                final item = sessions[index % sessions.length];
-                return AppCard(
-                  padding: const EdgeInsets.all(16),
-                  onTap: onHistory,
-                  child: SizedBox(
-                    width: 220,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          item['title'] as String,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          item['subtitle'] as String,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withOpacity(0.65),
-                              ),
-                        ),
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: (item['color'] as Color).withOpacity(0.14),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              item['status'] as String,
-                              style: TextStyle(
-                                color: item['color'] as Color,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+          ref.watch(_studentRecentSessionsProvider(studentUid)).when(
+            data: (sessions) {
+              if (sessions.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: Text('No recent sessions')),
                 );
-              },
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemCount: 3,
+              }
+              return SizedBox(
+                height: 148,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: sessions.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    final s = sessions[index];
+                    final Color statusColor;
+                    final String statusLabel;
+                    switch (s.status) {
+                      case AttendanceStatus.present:
+                        statusColor = AppTheme.secondary;
+                        statusLabel = 'Present';
+                      case AttendanceStatus.late:
+                        statusColor = AppTheme.warning;
+                        statusLabel = 'Late';
+                      case AttendanceStatus.absent:
+                        statusColor = AppTheme.absent;
+                        statusLabel = 'Absent';
+                    }
+                    return AppCard(
+                      padding: const EdgeInsets.all(16),
+                      onTap: onHistory,
+                      child: SizedBox(
+                        width: 220,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              s.courseName,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              DateFormat('dd MMM • HH:mm').format(s.timestamp),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.65),
+                                  ),
+                            ),
+                            Align(
+                              alignment: Alignment.bottomRight,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  statusLabel,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+            loading: () => const SizedBox(
+              height: 148,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, _) => const SizedBox(
+              height: 148,
+              child: Center(child: Text('No sessions')),
             ),
           ),
           const SizedBox(height: 24),
@@ -300,6 +400,7 @@ class _QuickAction extends StatelessWidget {
     required this.gradient,
     required this.onTap,
     required this.delay,
+    this.compact = false,
   });
 
   final IconData icon;
@@ -307,33 +408,44 @@ class _QuickAction extends StatelessWidget {
   final Gradient gradient;
   final VoidCallback onTap;
   final int delay;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final iconBox = Container(
+      width: compact ? 32 : 48,
+      height: compact ? 32 : 48,
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(compact ? 10 : 14),
+      ),
+      child: Icon(icon, color: Colors.white, size: compact ? 18 : 24),
+    );
     final actionCard = AppCard(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(compact ? 10 : 16),
       onTap: onTap,
       animate: false,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: gradient,
-              borderRadius: BorderRadius.circular(14),
+      child: compact
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                iconBox,
+                const SizedBox(width: 8),
+                Text(label, style: Theme.of(context).textTheme.labelMedium),
+              ],
+            )
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                iconBox,
+                const SizedBox(height: 12),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleSmall,
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.titleSmall,
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
     );
 
     return (actionCard as Widget)
@@ -359,7 +471,7 @@ class _MiniMetric extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.18),
+        color: color.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -392,6 +504,10 @@ class _AttendanceRateCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final rateAsync = ref.watch(_studentAttendanceRateProvider(studentUid));
+    final rate = rateAsync.value ?? 0.0;
+    final pct = '${(rate * 100).round()}%';
+
     return AppCard(
       padding: const EdgeInsets.all(20),
       child: Row(
@@ -403,17 +519,26 @@ class _AttendanceRateCard extends ConsumerWidget {
               fit: StackFit.expand,
               children: [
                 CircularProgressIndicator(
-                  value: 0.82,
+                  value: rate,
                   strokeWidth: 6,
                   backgroundColor: AppTheme.outline.withValues(alpha: 0.3),
                   color: AppTheme.secondary,
                   strokeCap: StrokeCap.round,
                 ),
-                const Center(
-                  child: Text(
-                    '82%',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                  ),
+                Center(
+                  child: rateAsync.isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          pct,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
               ],
             ),

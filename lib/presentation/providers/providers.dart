@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_attendance/data/repositories/firebase_absence_repository.dart';
 import 'package:smart_attendance/data/repositories/firebase_attendance_repository.dart';
@@ -21,9 +22,7 @@ import 'package:smart_attendance/domain/repositories/user_repository.dart';
 import 'package:smart_attendance/domain/entities/app_notification.dart';
 import 'package:smart_attendance/domain/usecases/mark_attendance_usecase.dart';
 
-final deviceServiceProvider = Provider<DeviceService>(
-  (ref) => DeviceService(),
-);
+final deviceServiceProvider = Provider<DeviceService>((ref) => DeviceService());
 
 final locationServiceProvider = Provider<LocationService>(
   (ref) => LocationService(),
@@ -52,13 +51,14 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
 // recreate FirebaseAuthRepository and restart authStateChanges
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   ref.keepAlive();
-  return FirebaseAuthRepository(catalog: ref.read(catalogRepositoryProvider));
+  return FirebaseAuthRepository(
+    catalog: Firebase.apps.isEmpty ? null : ref.read(catalogRepositoryProvider),
+  );
 });
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
   ref.keepAlive();
   return FirebaseAttendanceRepository(
-    catalog: ref.read(catalogRepositoryProvider),
     notifications: ref.read(notificationRepositoryProvider),
   );
 });
@@ -70,8 +70,9 @@ final absenceRepositoryProvider = Provider<AbsenceRepository>((ref) {
   );
 });
 
-final courseProposalRepositoryProvider =
-    Provider<CourseProposalRepository>((ref) {
+final courseProposalRepositoryProvider = Provider<CourseProposalRepository>((
+  ref,
+) {
   ref.keepAlive();
   return FirebaseCourseProposalRepository(
     catalog: ref.read(catalogRepositoryProvider),
@@ -92,12 +93,42 @@ final markAttendanceUseCaseProvider = Provider<MarkAttendanceUseCase>((ref) {
   );
 });
 
-// authStateProvider is a StreamProvider — it holds the single auth stream
-// for the lifetime of the app. keepAlive prevents it from restarting.
+// authStateProvider — single auth stream for the lifetime of the app.
+// keepAlive prevents the StreamProvider from restarting on widget rebuilds.
+//
+// The repository stream (FirebaseAuthRepository.authStateChanges) already
+// handles all stabilisation internally:
+//   - Never emits null while a Firebase Auth user exists and a Firestore
+//     fetch is in progress.
+//   - On timeout or error, emits the last known good user as a fallback.
+//   - Uses a broadcast StreamController so multiple listeners (Riverpod +
+//     GoRouter's refreshListenable) can subscribe without conflicts.
+//
+// Do NOT wrap this in a secondary StreamController or debounce layer —
+// non-broadcast wrappers break when GoRouter adds its own subscription.
 final authStateProvider = StreamProvider<AuthUser?>((ref) {
   ref.keepAlive();
-  return ref.read(authRepositoryProvider).authStateChanges;
+  AuthUser? previous;
+  bool hasSeenFirst = false;
+  return ref.read(authRepositoryProvider).authStateChanges.where((next) {
+    // Always pass through the very first value (even null) so the router
+    // transitions out of loading state when auth resolves with no user.
+    if (!hasSeenFirst) {
+      hasSeenFirst = true;
+      previous = next;
+      return true;
+    }
+    final changed = !_sameAuthUser(previous, next);
+    previous = next;
+    return changed;
+  });
 });
+
+bool _sameAuthUser(AuthUser? a, AuthUser? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null) return a == b;
+  return a.sameIdentity(b);
+}
 
 final deviceIdProvider = FutureProvider<String>((ref) async {
   return ref.read(deviceServiceProvider).getDeviceId();
@@ -105,10 +136,21 @@ final deviceIdProvider = FutureProvider<String>((ref) async {
 
 final notificationsProvider =
     StreamProvider.family<List<AppNotification>, String>((ref, userId) {
-  return ref.read(notificationRepositoryProvider).watchForUser(userId);
+      return ref.read(notificationRepositoryProvider).watchForUser(userId);
+    });
+
+final unreadNotificationCountProvider = StreamProvider.family<int, String>((
+  ref,
+  userId,
+) {
+  return ref.read(notificationRepositoryProvider).watchUnreadCount(userId);
 });
 
-final unreadNotificationCountProvider =
-    StreamProvider.family<int, String>((ref, userId) {
-  return ref.read(notificationRepositoryProvider).watchUnreadCount(userId);
+/// Live enrollment count for a student, streamed directly from Firestore.
+final studentEnrollmentCountProvider =
+    StreamProvider.autoDispose.family<int, String>((ref, studentId) {
+  return ref
+      .read(enrollmentRepositoryProvider)
+      .watchEnrollmentsForStudent(studentId)
+      .map((list) => list.length);
 });

@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:smart_attendance/core/constants/app_constants.dart';
 import 'package:smart_attendance/core/theme/app_theme.dart';
 import 'package:smart_attendance/presentation/widgets/design_system/app_card.dart';
 import 'package:smart_attendance/presentation/widgets/design_system/ap_loading.dart';
@@ -37,7 +39,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
     return authAsync.when(
       loading: () => const ApScaffold(body: ApLoadingList(count: 3)),
-      error: (_, __) => const ApScaffold(
+      error: (_, _) => const ApScaffold(
         body: ApEmptyState(
           icon: Icons.error_outline,
           title: 'Unable to load profile',
@@ -114,7 +116,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   }
 }
 
-class _HomeTab extends StatelessWidget {
+class _HomeTab extends ConsumerWidget {
   const _HomeTab({
     required this.adminName,
     required this.onUsers,
@@ -128,7 +130,7 @@ class _HomeTab extends StatelessWidget {
   final VoidCallback onCourses;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return SingleChildScrollView(
       padding: AppTheme.screenPadding,
       child: Column(
@@ -150,7 +152,7 @@ class _HomeTab extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(
                         context,
-                      ).colorScheme.onSurface.withOpacity(0.7),
+                      ).colorScheme.onSurface.withValues(alpha: 0.7),
                     ),
                   ),
                 ],
@@ -162,10 +164,10 @@ class _HomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: AppCard(
-                  child: _StatMetric(
+                  child: _LiveStatMetric(
                     icon: Icons.school_rounded,
                     label: 'Students',
-                    value: '—',
+                    collection: AppConstants.studentsCollection,
                     gradient: AppTheme.successGradient,
                   ),
                 ),
@@ -173,10 +175,10 @@ class _HomeTab extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: AppCard(
-                  child: _StatMetric(
+                  child: _LiveStatMetric(
                     icon: Icons.person_2_rounded,
                     label: 'Lecturers',
-                    value: '—',
+                    collection: AppConstants.lecturersCollection,
                     gradient: AppTheme.primaryGradient,
                   ),
                 ),
@@ -188,10 +190,10 @@ class _HomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: AppCard(
-                  child: _StatMetric(
+                  child: _LiveStatMetric(
                     icon: Icons.menu_book_rounded,
                     label: 'Courses',
-                    value: '—',
+                    collection: AppConstants.coursesCollection,
                     gradient: AppTheme.warningGradient,
                   ),
                 ),
@@ -199,10 +201,10 @@ class _HomeTab extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: AppCard(
-                  child: _StatMetric(
+                  child: _LiveStatMetric(
                     icon: Icons.apartment_rounded,
                     label: 'Departments',
-                    value: '—',
+                    collection: AppConstants.departmentsCollection,
                     gradient: AppTheme.dangerGradient,
                   ),
                 ),
@@ -274,7 +276,7 @@ class _QuickActionCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.12),
+                  color: Colors.white.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: Colors.white),
@@ -294,17 +296,47 @@ class _QuickActionCard extends StatelessWidget {
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withOpacity(0.8),
+                        color: Colors.white.withValues(alpha: 0.8),
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.85)),
+              Icon(Icons.chevron_right, color: Colors.white.withValues(alpha: 0.85)),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _LiveStatMetric extends ConsumerWidget {
+  const _LiveStatMetric({
+    required this.icon,
+    required this.label,
+    required this.collection,
+    required this.gradient,
+  });
+
+  final IconData icon;
+  final String label;
+  final String collection;
+  final Gradient gradient;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection(collection).snapshots(),
+      builder: (context, snap) {
+        final count = snap.hasData ? snap.data!.size.toString() : '—';
+        return _StatMetric(
+          icon: icon,
+          label: label,
+          value: count,
+          gradient: gradient,
+        );
+      },
     );
   }
 }
@@ -337,7 +369,7 @@ class _StatMetric extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
+              color: Colors.white.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: Colors.white, size: 20),
@@ -354,7 +386,7 @@ class _StatMetric extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.white.withOpacity(0.85),
+              color: Colors.white.withValues(alpha: 0.85),
             ),
           ),
         ],

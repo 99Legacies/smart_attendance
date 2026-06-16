@@ -1,10 +1,11 @@
-import 'package:hive_flutter/hive_flutter.dart';
 
 // Hive model definitions for offline-first architecture
 // No code generation needed - using standard Hive storage without custom adapters
 
 /// Local Hive models for offline-first architecture
 /// Each model mirrors the domain entity structure
+library;
+
 
 class HiveAppUser {
   final String id;

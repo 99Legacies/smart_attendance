@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smart_attendance/core/constants/app_constants.dart';
 import 'package:smart_attendance/core/errors/app_exception.dart';
@@ -8,21 +10,16 @@ import 'package:smart_attendance/domain/entities/attendance_record.dart';
 import 'package:smart_attendance/domain/entities/attendance_session.dart';
 import 'package:smart_attendance/domain/entities/attendance_status.dart';
 import 'package:smart_attendance/domain/repositories/attendance_repository.dart';
-import 'package:smart_attendance/domain/repositories/catalog_repository.dart';
 import 'package:smart_attendance/domain/repositories/notification_repository.dart';
 import 'package:uuid/uuid.dart';
 
 class FirebaseAttendanceRepository implements AttendanceRepository {
   FirebaseAttendanceRepository({
     FirebaseFirestore? firestore,
-    CatalogRepository? catalog,
-    NotificationRepository? notifications,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _catalog = catalog,
-        _notifications = notifications;
+    this._notifications,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
-  final CatalogRepository? _catalog;
   final NotificationRepository? _notifications;
   final _uuid = const Uuid();
 
@@ -113,10 +110,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       session: session,
       sessionId: sessionId,
       courseName: courseName,
-    ).catchError((e) {
+    ).catchError((error, stack) {
       // Log but don't rethrow — session is already ended
-      // ignore: avoid_print
-      print('processMissedAttendance error: $e');
+      developer.log(
+        'processMissedAttendance error: $error',
+        name: 'FirebaseAttendance',
+        error: error,
+        stackTrace: stack,
+      );
     });
   }
 
@@ -136,8 +137,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
     if (studentsSnap.docs.isEmpty) return;
 
-    final recordsSnap =
-        await _records.where('sessionId', isEqualTo: sessionId).get();
+    final recordsSnap = await _records
+        .where('sessionId', isEqualTo: sessionId)
+        .get();
     final attendedIds = recordsSnap.docs
         .map((d) => d.data()['studentId'] as String? ?? '')
         .toSet();
@@ -162,8 +164,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       );
       batch.set(recordRef, record.toFirestore());
 
-      final notifRef =
-          _firestore.collection(AppConstants.notificationsCollection).doc();
+      final notifRef = _firestore
+          .collection(AppConstants.notificationsCollection)
+          .doc();
       batch.set(notifRef, {
         'recipientId': studentId,
         'type': NotificationType.missedClass.name,
@@ -173,10 +176,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
         'relatedId': sessionId,
-        'metadata': {
-          'courseId': session.courseId,
-          'sessionId': sessionId,
-        },
+        'metadata': {'courseId': session.courseId, 'sessionId': sessionId},
       });
       notifyCount++;
     }
@@ -204,7 +204,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final sessionSnap = await tx.get(sessionRef);
       if (!sessionSnap.exists) {
         throw const AppException(
-            'Session not found.', code: 'session_not_found');
+          'Session not found.',
+          code: 'session_not_found',
+        );
       }
 
       final session = AttendanceSessionModel.fromFirestore(sessionSnap);
@@ -215,10 +217,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         );
       }
       if (session.isQrExpired || session.qrToken != qrToken) {
-        throw const AppException(
-          'QR code has expired.',
-          code: 'qr_expired',
-        );
+        throw const AppException('QR code has expired.', code: 'qr_expired');
       }
 
       final existing = await _records
@@ -234,8 +233,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         );
       }
 
-      final minutesLate =
-          DateTime.now().difference(session.startTime).inMinutes;
+      final minutesLate = DateTime.now()
+          .difference(session.startTime)
+          .inMinutes;
       final status = minutesLate > AppConstants.lateThresholdMinutes
           ? AttendanceStatus.late
           : AttendanceStatus.present;
@@ -284,33 +284,37 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   Stream<List<AttendanceRecord>> watchRecordsForSession(String sessionId) {
     return _records
         .where('sessionId', isEqualTo: sessionId)
-        .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((s) => s.docs
-            .map((d) => AttendanceRecordModel.fromFirestore(d))
-            .toList());
+        .map(
+          (s) => s.docs
+              .map((d) => AttendanceRecordModel.fromFirestore(d))
+              .toList()
+            ..sort((a, b) => b.timestamp.compareTo(a.timestamp)),
+        );
   }
 
   @override
   Stream<List<AttendanceRecord>> watchRecordsForStudent(String studentUid) {
     return _records
         .where('studentId', isEqualTo: studentUid)
-        .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((s) => s.docs
-            .map((d) => AttendanceRecordModel.fromFirestore(d))
-            .toList());
+        .map(
+          (s) => s.docs
+              .map((d) => AttendanceRecordModel.fromFirestore(d))
+              .toList()
+            ..sort((a, b) => b.timestamp.compareTo(a.timestamp)),
+        );
   }
 
   @override
   Future<List<AttendanceRecord>> getRecordsForStudent(String studentUid) async {
     final snap = await _records
         .where('studentId', isEqualTo: studentUid)
-        .orderBy('timestamp', descending: true)
         .get();
     return snap.docs
         .map((d) => AttendanceRecordModel.fromFirestore(d))
-        .toList();
+        .toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
 
   @override
@@ -331,8 +335,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<Map<String, int>> getSessionStats(String sessionId) async {
-    final snap =
-        await _records.where('sessionId', isEqualTo: sessionId).get();
+    final snap = await _records.where('sessionId', isEqualTo: sessionId).get();
     var present = 0, late = 0, absent = 0;
     for (final doc in snap.docs) {
       final status = doc.data()['status'] as String? ?? '';

@@ -33,25 +33,37 @@ class HybridCatalogRepository implements CatalogRepository {
   @override
   Stream<List<Department>> watchDepartments() {
     final controller = StreamController<List<Department>>.broadcast();
+    StreamSubscription<List<Department>>? remoteSub;
 
-    Future<void> emit() async {
-      var list = await _localDept.getAllDepartments();
-      // If local cache is empty, fetch from Firebase and cache locally
-      if (list.isEmpty) {
-        list = await _remote.getDepartments();
-        for (final dept in list) {
+    // Emit from local cache immediately so UI loads offline too
+    _localDept.getAllDepartments().then((local) {
+      if (!controller.isClosed) controller.add(local);
+    }).catchError((_) {});
+
+    // Subscribe to Firebase for live updates; sync Hive on every event so
+    // deletes from one client propagate to all other clients in real-time.
+    remoteSub = _remote.watchDepartments().listen(
+      (depts) async {
+        final localAll = await _localDept.getAllDepartments();
+        final remoteIds = depts.map((d) => d.id).toSet();
+        // Remove any departments that no longer exist in Firebase
+        for (final local in localAll) {
+          if (!remoteIds.contains(local.id)) {
+            await LocalDatabaseService.departmentsBox.delete(local.id);
+          }
+        }
+        // Upsert current departments into Hive
+        for (final dept in depts) {
           await _localDept.saveDepartment(dept);
         }
-      }
-      controller.add(list);
-    }
+        if (!controller.isClosed) controller.add(depts);
+      },
+      onError: (_) {
+        // Firebase unavailable — Hive already emitted above, nothing more to do
+      },
+    );
 
-    emit();
-    final sub = LocalDatabaseService.departmentsBox.watch().listen((_) async {
-      await emit();
-    });
-
-    controller.onCancel = () => sub.cancel();
+    controller.onCancel = () => remoteSub?.cancel();
     return controller.stream;
   }
 
@@ -88,7 +100,7 @@ class HybridCatalogRepository implements CatalogRepository {
         operation: 'create',
         collection: AppConstants.departmentsCollection,
         documentId: id,
-        data: {'id': id, 'name': name.trim()},
+        data: {'id': id, 'name': name.trim(), 'departmentId': id},
       );
     }
   }
@@ -101,19 +113,26 @@ class HybridCatalogRepository implements CatalogRepository {
       operation: 'update',
       collection: AppConstants.departmentsCollection,
       documentId: id,
-      data: {'id': id, 'name': name.trim()},
+      data: {'id': id, 'name': name.trim(), 'departmentId': id},
     );
   }
 
   @override
   Future<void> deleteDepartment(String id) async {
+    // Remove from local cache immediately for instant UI response
     await LocalDatabaseService.departmentsBox.delete(id);
-    await OfflineQueueService.enqueue(
-      operation: 'delete',
-      collection: AppConstants.departmentsCollection,
-      documentId: id,
-      data: {},
-    );
+    // Delete from Firebase directly so all connected clients update in real-time
+    try {
+      await _remote.deleteDepartment(id);
+    } catch (_) {
+      // Offline or transient error — queue for background sync
+      await OfflineQueueService.enqueue(
+        operation: 'delete',
+        collection: AppConstants.departmentsCollection,
+        documentId: id,
+        data: {},
+      );
+    }
   }
 
   @override
@@ -157,28 +176,41 @@ class HybridCatalogRepository implements CatalogRepository {
   @override
   Stream<List<Course>> watchCourses({String? departmentId}) {
     final controller = StreamController<List<Course>>.broadcast();
+    StreamSubscription<List<Course>>? remoteSub;
 
-    Future<void> emit() async {
-      var list = await _localCatalog.getAllCourses();
-      // If local cache is empty, fetch from Firebase and cache locally
-      if (list.isEmpty) {
-        list = await _remote.getCourses(departmentId: departmentId);
-        for (final course in list) {
-          await _localCatalog.saveCourse(course);
-        }
-      }
-      controller.add(
-        departmentId == null
-            ? list
-            : list.where((c) => c.allowsDepartment(departmentId)).toList(),
-      );
+    List<Course> applyFilter(List<Course> all) {
+      if (departmentId == null) return all;
+      return all.where((c) => c.allowsDepartment(departmentId)).toList();
     }
 
-    emit();
-    final sub = LocalDatabaseService.coursesBox.watch().listen((_) async {
-      await emit();
-    });
-    controller.onCancel = () => sub.cancel();
+    // Emit from Hive immediately so the UI loads instantly offline
+    _localCatalog.getAllCourses().then((all) {
+      if (!controller.isClosed) controller.add(applyFilter(all));
+    }).catchError((_) {});
+
+    // Subscribe to Firebase for live updates; sync Hive on every event so
+    // deletes propagate to local cache and offline views stay consistent.
+    remoteSub = _remote.watchCourses().listen(
+      (courses) async {
+        final localAll = await _localCatalog.getAllCourses();
+        final remoteIds = courses.map((c) => c.id).toSet();
+        // Remove courses that Firebase no longer has
+        for (final local in localAll) {
+          if (!remoteIds.contains(local.id)) {
+            await _localCatalog.deleteCourse(local.id);
+          }
+        }
+        for (final course in courses) {
+          await _localCatalog.saveCourse(course);
+        }
+        if (!controller.isClosed) controller.add(applyFilter(courses));
+      },
+      onError: (_) {
+        // Firebase unavailable — Hive already emitted above
+      },
+    );
+
+    controller.onCancel = () => remoteSub?.cancel();
     return controller.stream;
   }
 
@@ -296,13 +328,20 @@ class HybridCatalogRepository implements CatalogRepository {
 
   @override
   Future<void> deleteCourse(String id) async {
+    // Remove from local cache immediately for instant UI response
     await _localCatalog.deleteCourse(id);
-    await OfflineQueueService.enqueue(
-      operation: 'delete',
-      collection: AppConstants.coursesCollection,
-      documentId: id,
-      data: {},
-    );
+    // Delete from Firebase directly so all connected clients update in real-time
+    try {
+      await _remote.deleteCourse(id);
+    } catch (_) {
+      // Offline or transient error — queue for background sync
+      await OfflineQueueService.enqueue(
+        operation: 'delete',
+        collection: AppConstants.coursesCollection,
+        documentId: id,
+        data: {},
+      );
+    }
   }
 
   // Students
@@ -440,26 +479,30 @@ class HybridCatalogRepository implements CatalogRepository {
   Stream<List<Student>> watchStudents() {
     final controller = StreamController<List<Student>>.broadcast();
     Future<void> emit() async {
-      var list = LocalDatabaseService.studentsBox.values
-          .map(_hiveStudentToDomain)
-          .toList();
-      // If local cache is empty, fetch from Firebase and cache locally
-      if (list.isEmpty) {
-        list = await _remote.watchStudents().first;
-        for (final student in list) {
-          final h = HiveStudent(
-            id: student.id,
-            name: student.name,
-            studentId: student.studentId,
-            email: student.email,
-            departmentId: student.departmentId,
-            courseIds: student.courseIds,
-            deviceId: student.deviceId,
-          );
-          await LocalDatabaseService.studentsBox.put(student.id, h);
+      try {
+        var list = LocalDatabaseService.studentsBox.values
+            .map(_hiveStudentToDomain)
+            .toList();
+        // If local cache is empty, fetch from Firebase and cache locally
+        if (list.isEmpty) {
+          list = await _remote.watchStudents().first;
+          for (final student in list) {
+            final h = HiveStudent(
+              id: student.id,
+              name: student.name,
+              studentId: student.studentId,
+              email: student.email,
+              departmentId: student.departmentId,
+              courseIds: student.courseIds,
+              deviceId: student.deviceId,
+            );
+            await LocalDatabaseService.studentsBox.put(student.id, h);
+          }
         }
+        if (!controller.isClosed) controller.add(list);
+      } catch (e, st) {
+        if (!controller.isClosed) controller.addError(e, st);
       }
-      controller.add(list);
     }
 
     emit();

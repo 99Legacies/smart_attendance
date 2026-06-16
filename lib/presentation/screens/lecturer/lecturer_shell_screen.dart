@@ -102,6 +102,7 @@ class _LecturerShellScreenState extends ConsumerState<LecturerShellScreen> {
         final navItems = RoleNavigationConfig.lecturer(
           lecturerId: uid,
           homePage: LecturerHomeScreen(
+            lecturerId: uid,
             lecturerName: name,
             onNewSession: openSession,
             onSessions: openSessions,

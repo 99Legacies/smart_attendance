@@ -22,7 +22,7 @@ class AuthPrimaryButton extends StatelessWidget {
         onPressed: loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           elevation: 2,
-          shadowColor: AppTheme.primary.withOpacity(0.4),
+          shadowColor: AppTheme.primary.withValues(alpha: 0.4),
         ),
         child: loading
             ? const SizedBox(

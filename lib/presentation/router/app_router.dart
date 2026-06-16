@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,15 +16,46 @@ import 'package:smart_attendance/presentation/screens/auth/splash_screen.dart';
 import 'package:smart_attendance/presentation/screens/lecturer/lecturer_shell_screen.dart';
 import 'package:smart_attendance/presentation/screens/student/student_shell_screen.dart';
 
+// Consistent fade transition used across all routes. 350ms forward, 250ms
+// reverse — fast enough to feel snappy on mid-range hardware.
+CustomTransitionPage<T> _fadePage<T>(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
+) {
+  return CustomTransitionPage<T>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 350),
+    reverseTransitionDuration: const Duration(milliseconds: 250),
+    transitionsBuilder: (_, animation, _, child) => FadeTransition(
+      opacity: CurveTween(curve: Curves.easeInOut).animate(animation),
+      child: child,
+    ),
+  );
+}
+
+// The notifier is kept alive at the app level so GoRouter always has a valid
+// ChangeNotifier to listen to. routerProvider updates it every time
+// authStateProvider emits a meaningfully different value.
+final _routerRefreshNotifier = _AuthStateRefreshNotifier();
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  // Watch authStateProvider — this rebuilds routerProvider on every emission.
+  // We then push the new state into the notifier, which tells GoRouter to
+  // re-run redirect ONLY when the user/role/loading state actually changed.
+  ref.listen<AsyncValue<AuthUser?>>(
+    authStateProvider,
+    (_, next) => _routerRefreshNotifier.update(next),
+    fireImmediately: true,
+  );
 
   return GoRouter(
     initialLocation: '/',
-    refreshListenable: GoRouterRefreshStream(
-      ref.watch(authRepositoryProvider).authStateChanges,
-    ),
+    refreshListenable: _routerRefreshNotifier,
     redirect: (context, state) {
+      final authState =
+          _routerRefreshNotifier.state ?? const AsyncValue.loading();
       final path = state.matchedLocation;
       final isAuthRoute =
           path == '/login' ||
@@ -46,8 +75,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // No value yet (stream hasn't emitted first value) — don't redirect
       if (!authState.hasValue) return null;
 
-      // Auth errored — stay on auth/splash, go to login from elsewhere
-      // But don't kick from dashboard — wait for stream to recover
+      // Auth errored — stay on auth/splash/dashboard, go to login elsewhere
       if (authState.hasError) {
         if (isAuthRoute || onSplash || onDashboard) return null;
         return '/login';
@@ -55,22 +83,16 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       final user = authState.value;
 
-      // user is null — only redirect to login if NOT on a dashboard
-      // This prevents kicking the user during the brief null emission
-      // that happens right after login while Firestore resolves the profile
       if (user == null) {
-        if (isAuthRoute || onSplash) return null;
-        // If on a dashboard, stay put — auth stream may still be resolving
-        if (onDashboard) return null;
+        // Auth has resolved to "no user" — redirect to login from any route
+        // except pages that are already part of the auth flow.
+        if (isAuthRoute) return null;
         return '/login';
       }
 
-      // User is authenticated — send to their home if on auth/splash routes
+      // Authenticated — navigate away from splash/auth to role home
       final roleHome = RoleRoutes.homeFor(user.role);
-
-      if (isAuthRoute || onSplash) {
-        return roleHome;
-      }
+      if (isAuthRoute || onSplash) return roleHome;
 
       // Prevent cross-role access
       if (user.role == UserRole.student &&
@@ -91,31 +113,45 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/signup', builder: (_, __) => const RegisterScreen()),
-      GoRoute(path: '/register', redirect: (_, __) => '/signup'),
+      GoRoute(
+        path: '/',
+        pageBuilder: (ctx, state) => _fadePage(ctx, state, const SplashScreen()),
+      ),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (ctx, state) => _fadePage(ctx, state, const LoginScreen()),
+      ),
+      GoRoute(
+        path: '/signup',
+        pageBuilder: (ctx, state) => _fadePage(ctx, state, const RegisterScreen()),
+      ),
+      GoRoute(path: '/register', redirect: (_, _) => '/signup'),
       GoRoute(
         path: '/forgot-password',
-        builder: (_, __) => const ForgotPasswordScreen(),
+        pageBuilder: (ctx, state) =>
+            _fadePage(ctx, state, const ForgotPasswordScreen()),
       ),
       GoRoute(
         path: '/student-dashboard',
-        builder: (_, __) => const StudentShellScreen(),
+        pageBuilder: (ctx, state) =>
+            _fadePage(ctx, state, const StudentShellScreen()),
       ),
-      GoRoute(path: '/student', redirect: (_, __) => '/student-dashboard'),
+      GoRoute(path: '/student', redirect: (_, _) => '/student-dashboard'),
       GoRoute(
         path: '/admin-dashboard',
-        builder: (_, __) => const AdminDashboardScreen(),
+        pageBuilder: (ctx, state) =>
+            _fadePage(ctx, state, const AdminDashboardScreen()),
       ),
-      GoRoute(path: '/admin', redirect: (_, __) => '/admin-dashboard'),
+      GoRoute(path: '/admin', redirect: (_, _) => '/admin-dashboard'),
       GoRoute(
         path: '/admin/users',
-        builder: (_, __) => const AdminUsersShellScreen(),
+        pageBuilder: (ctx, state) =>
+            _fadePage(ctx, state, const AdminUsersShellScreen()),
       ),
       GoRoute(
         path: '/lecturer',
-        builder: (_, __) => const LecturerShellScreen(),
+        pageBuilder: (ctx, state) =>
+            _fadePage(ctx, state, const LecturerShellScreen()),
       ),
     ],
   );
@@ -140,16 +176,34 @@ class AdminUsersShellScreen extends ConsumerWidget {
   }
 }
 
-class GoRouterRefreshStream extends ChangeNotifier {
-  GoRouterRefreshStream(Stream<AuthUser?> stream) {
-    _subscription = stream.listen((_) => notifyListeners());
-  }
+// Notifies GoRouter only when the resolved AuthUser meaningfully changes.
+// Fires on: loading→data, user present→null, uid/role change, error state.
+// Does NOT fire on mid-fetch null emissions or token refreshes where the
+// user identity hasn't actually changed.
+class _AuthStateRefreshNotifier extends ChangeNotifier {
+  AsyncValue<AuthUser?>? _state;
 
-  late final StreamSubscription<AuthUser?> _subscription;
+  AsyncValue<AuthUser?>? get state => _state;
 
-  @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
+  void update(AsyncValue<AuthUser?> next) {
+    final prev = _state;
+    if (prev == null) {
+      // First emission — always notify so router runs initial redirect
+      _state = next;
+      notifyListeners();
+      return;
+    }
+
+    final prevUser = prev.asData?.value;
+    final nextUser = next.asData?.value;
+
+    final changed =
+        prev.isLoading != next.isLoading ||
+        prev.hasError != next.hasError ||
+        prevUser?.uid != nextUser?.uid ||
+        prevUser?.role != nextUser?.role;
+
+    _state = next;
+    if (changed) notifyListeners();
   }
 }

@@ -10,7 +10,6 @@ import 'package:smart_attendance/firebase_options.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Initialize local database FIRST (before Firebase)
   try {
     developer.log('Initializing local database...', name: 'main');
     await LocalDatabaseService.initialize();
@@ -24,12 +23,17 @@ Future<void> main() async {
     );
   }
 
-  // 2. Initialize Firebase (non-blocking, will be retried)
+  var firebaseReady = false;
   try {
     developer.log('Initializing Firebase...', name: 'main');
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    ).timeout(const Duration(seconds: 8));
+
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+
+    firebaseReady = true;
     developer.log('Firebase initialized successfully', name: 'main');
   } catch (error, stack) {
     developer.log(
@@ -38,9 +42,14 @@ Future<void> main() async {
       error: error,
       stackTrace: stack,
     );
-    // Continue anyway - app will work offline with local data
   }
 
-  // 3. Run app with ProviderScope
+  if (!firebaseReady) {
+    developer.log(
+      'Starting in offline-first mode with Firebase unavailable',
+      name: 'main',
+    );
+  }
+
   runApp(const ProviderScope(child: AttendProApp()));
 }

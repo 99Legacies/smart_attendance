@@ -188,7 +188,7 @@ class _CourseListState extends ConsumerState<_CourseList> {
                   )
                 : ListView.separated(
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
                       final course = filtered[i];
                       final isEnrolled = enrolled.contains(course.id);
@@ -199,7 +199,7 @@ class _CourseListState extends ConsumerState<_CourseList> {
                                 ? Theme.of(
                                     context,
                                   ).colorScheme.primaryContainer
-                                : Theme.of(context).colorScheme.surfaceVariant,
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
                             child: Icon(
                               isEnrolled ? Icons.check : Icons.school_outlined,
                               color: isEnrolled
@@ -252,7 +252,10 @@ Lecturer _lecturerWithCourses(Lecturer l, List<String> courseIds) {
 }
 
 final _lecturerProvider = FutureProvider.family<Lecturer?, String>((ref, uid) {
-  return ref.watch(catalogRepositoryProvider).getLecturer(uid);
+  return ref.read(catalogRepositoryProvider).getLecturer(uid).timeout(
+    const Duration(seconds: 8),
+    onTimeout: () => null,
+  );
 });
 
 final _allCoursesProvider = StreamProvider<List<Course>>((ref) {

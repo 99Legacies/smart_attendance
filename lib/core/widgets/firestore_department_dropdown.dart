@@ -4,6 +4,10 @@ import 'package:smart_attendance/data/repositories/firebase_catalog_repository.d
 import 'package:smart_attendance/domain/entities/department.dart';
 
 /// Dropdown of all departments from Firestore (no user-based filtering).
+///
+/// Set [returnId] to true when the caller needs the Firestore document ID
+/// (e.g. course creation, course proposals). Leave it false (default) when
+/// the caller needs the human-readable department name (e.g. registration).
 class FirestoreDepartmentDropdown extends ConsumerWidget {
   const FirestoreDepartmentDropdown({
     super.key,
@@ -11,12 +15,17 @@ class FirestoreDepartmentDropdown extends ConsumerWidget {
     required this.onChanged,
     this.validator,
     this.labelText = 'Department',
+    this.returnId = false,
   });
 
   final String? value;
   final ValueChanged<String?> onChanged;
   final String? Function(String?)? validator;
   final String labelText;
+
+  /// When true, onChanged receives the department's Firestore document ID.
+  /// When false (default), onChanged receives the department name.
+  final bool returnId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,13 +40,13 @@ class FirestoreDepartmentDropdown extends ConsumerWidget {
           );
         }
         return DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           isExpanded: true,
           decoration: InputDecoration(labelText: labelText),
           items: departments
               .map(
                 (d) => DropdownMenuItem<String>(
-                  value: d.name,
+                  value: returnId ? d.id : d.name,
                   child: Text(d.name),
                 ),
               )

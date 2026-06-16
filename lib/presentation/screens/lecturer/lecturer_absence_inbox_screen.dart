@@ -9,6 +9,7 @@ import 'package:smart_attendance/domain/entities/absence_request.dart';
 import 'package:smart_attendance/domain/entities/lecturer.dart';
 import 'package:smart_attendance/domain/entities/student.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
+import 'package:smart_attendance/presentation/widgets/design_system/ap_loading.dart';
 
 class LecturerAbsenceInboxScreen extends ConsumerWidget {
   const LecturerAbsenceInboxScreen({super.key, required this.lecturerId});
@@ -37,18 +38,18 @@ class LecturerAbsenceInboxScreen extends ConsumerWidget {
             return ListView.separated(
               padding: AppTheme.screenPadding,
               itemCount: requests.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (_, i) => _AbsenceRequestCard(
                 request: requests[i],
                 lecturerId: lecturerId,
               ),
             );
           },
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const ApLoadingList(),
           error: (e, _) => Center(child: Text('Error: $e')),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const ApLoadingList(),
       error: (e, _) => Center(child: Text('Error: $e')),
     );
   }
@@ -158,7 +159,7 @@ class _AbsenceRequestCardState extends ConsumerState<_AbsenceRequestCard> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  error: (_, __) => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
                 ),
               ],
             ),

@@ -6,6 +6,7 @@ import 'package:smart_attendance/core/utils/snackbar_utils.dart';
 import 'package:smart_attendance/core/widgets/app_card.dart';
 import 'package:smart_attendance/domain/entities/course_proposal.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
+import 'package:smart_attendance/presentation/widgets/design_system/ap_loading.dart';
 
 class AdminPendingCoursesScreen extends ConsumerWidget {
   const AdminPendingCoursesScreen({super.key});
@@ -24,11 +25,11 @@ class AdminPendingCoursesScreen extends ConsumerWidget {
         return ListView.separated(
           padding: AppTheme.screenPadding,
           itemCount: proposals.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
           itemBuilder: (_, i) => _ProposalReviewCard(proposal: proposals[i]),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const ApLoadingList(),
       error: (e, _) => Center(child: Text('Error: $e')),
     );
   }

@@ -1,19 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ─── Helper functions ────────────────────────────────────────────────────
+
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return isSignedIn() &&
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
         (
-          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-          (
-            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-          )
-        );
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        )
+      );
     }
 
     function isLecturer() {
@@ -30,8 +32,17 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    // ─── User profiles ────────────────────────────────────────────────────────
+
     match /users/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
+      // Single-document read: owner, admin, or lecturer may fetch one profile.
+      allow get: if isOwner(uid) || isAdmin() || isLecturer();
+      // Collection-level query (list): only admin or lecturer may query the
+      // entire users collection.  Separating get/list removes the per-document
+      // path-variable (uid) dependency that would otherwise force Firestore to
+      // evaluate isAdmin() once per returned document, which it cannot guarantee
+      // at query-plan time and so denies the entire list with PERMISSION_DENIED.
+      allow list: if isAdmin() || isLecturer();
       allow create: if isSignedIn() && isOwner(uid) &&
         request.resource.data.keys().hasAll(['name', 'email', 'department', 'role', 'roleId', 'createdAt']) &&
         request.resource.data.role in ['student', 'lecturer'] &&
@@ -41,37 +52,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /departments/{id} {
-      allow read: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
-    }
-
-    match /courses/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /course_proposals/{id} {
-      allow read: if isSignedIn() && (
-        isAdmin() ||
-        resource.data.lecturerId == request.auth.uid
-      );
-      allow create: if isLecturer() &&
-        request.resource.data.lecturerId == request.auth.uid &&
-        request.resource.data.status == 'pending';
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /notifications/{id} {
-      allow read: if isSignedIn() &&
-        resource.data.recipientId == request.auth.uid;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() &&
-        resource.data.recipientId == request.auth.uid;
-      allow delete: if isAdmin();
-    }
+    // ─── Role collections ─────────────────────────────────────────────────────
 
     match /admins/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
@@ -79,43 +60,164 @@ service cloud.firestore {
     }
 
     match /students/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin() || isLecturer());
-      allow create: if isSignedIn() && request.auth.uid == uid;
-      allow update: if isAdmin() || request.auth.uid == uid;
+      // list (queries) allowed without auth — registration checks for duplicate
+      // student IDs before creating a Firebase Auth account.
+      allow list: if true;
+      allow get: if isOwner(uid) || isAdmin() || isLecturer();
+      allow create: if isSignedIn() && isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
       allow delete: if isAdmin();
     }
 
     match /lecturers/{uid} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == uid;
-      allow update: if isAdmin() || request.auth.uid == uid;
+      // list (queries) allowed without auth — registration checks for duplicate
+      // lecturer IDs before creating a Firebase Auth account.
+      allow list: if true;
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
       allow delete: if isAdmin();
     }
 
-    match /attendance_sessions/{id} {
+    // ─── Catalog ──────────────────────────────────────────────────────────────
+
+    match /departments/{id} {
+      // Readable without auth so the registration form can list departments
+      allow read: if true;
+      // Signed-in users can create departments — needed by ensureDepartmentByName
+      // during registration (runs after Firebase Auth account is created).
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /courses/{id} {
+      // Courses are not sensitive — all signed-in users can browse them
       allow read: if isSignedIn();
-      allow create: if isLecturer();
-      allow update: if isLecturer() && resource.data.lecturerId == request.auth.uid;
+      allow write: if isAdmin();
+    }
+
+    // ─── Enrollments ──────────────────────────────────────────────────────────
+
+    match /enrollments/{id} {
+      // Single-document read: owner, lecturer, or admin.
+      allow get: if isAdmin() || isLecturer() ||
+        (isSignedIn() && resource.data.studentId == request.auth.uid);
+      // Query (list): any signed-in user may run a query; the app always
+      // filters by studentId == uid. Separating get/list avoids the Firestore
+      // limitation where resource.data is unavailable at query-plan time.
+      allow list: if isSignedIn();
+      // Students can enrol themselves; admin can enrol anyone
+      allow create: if isAdmin() ||
+        (isSignedIn() && request.resource.data.studentId == request.auth.uid);
+      // Only admin can modify or delete enrolments
+      allow update, delete: if isAdmin();
+    }
+
+    // ─── Attendance ───────────────────────────────────────────────────────────
+
+    match /attendance_sessions/{id} {
+      // All signed-in users can read sessions (students check open sessions)
+      allow read: if isSignedIn();
+      // Only lecturers can open a session
+      allow create: if isLecturer() &&
+        request.resource.data.lecturerId == request.auth.uid;
+      // Only the owning lecturer or admin can update (close / extend session)
+      allow update: if isAdmin() ||
+        (isLecturer() && resource.data.lecturerId == request.auth.uid);
       allow delete: if isAdmin();
     }
 
     match /attendance_records/{id} {
-      allow read: if isSignedIn();
-      allow create: if isStudent() || isLecturer() || isAdmin();
+      // Single-document read: only the student, a lecturer, or admin.
+      allow get: if isAdmin() || isLecturer() ||
+        (isSignedIn() && resource.data.studentId == request.auth.uid);
+      // Query (list): any signed-in user may run a query; the student history
+      // and home screens always supply studentId == uid, and lecturer session
+      // views supply sessionId. Separating get/list avoids the Firestore
+      // limitation where resource.data is unavailable at query-plan time,
+      // which would otherwise deny every list request with permission-denied.
+      allow list: if isSignedIn();
+      // Students mark their own attendance; lecturers and admins can create records
+      allow create: if isAdmin() || isLecturer() ||
+        (isSignedIn() && request.resource.data.studentId == request.auth.uid);
+      // Only admin can correct or delete records
       allow update, delete: if isAdmin();
     }
 
+    // ─── Absence requests ─────────────────────────────────────────────────────
+
     match /absence_requests/{id} {
-      allow read: if isSignedIn() && (
-        resource.data.studentId == request.auth.uid || isAdmin() || isLecturer()
-      );
-      allow create: if isStudent() && request.resource.data.studentId == request.auth.uid;
+      // Single-document read: owner, lecturer, or admin.
+      allow get: if isAdmin() || isLecturer() ||
+        (isStudent() && resource.data.studentId == request.auth.uid);
+      // Query (list): allow admin, lecturer, or the student themselves.
+      // Separating get/list avoids the Firestore resource.data limitation.
+      allow list: if isAdmin() || isLecturer() || isSignedIn();
+      allow create: if isStudent() &&
+        request.resource.data.studentId == request.auth.uid;
+      // Lecturers and admins approve / reject; students cannot modify after submit
       allow update: if isAdmin() || isLecturer();
+      allow delete: if isAdmin();
     }
+
+    // ─── Course proposals ─────────────────────────────────────────────────────
+
+    match /course_proposals/{id} {
+      // Single-document read: admin or the owning lecturer.
+      allow get: if isAdmin() ||
+        (isLecturer() && resource.data.lecturerId == request.auth.uid);
+      // Query (list): admin or any lecturer may list proposals.
+      // Separating get/list avoids the Firestore resource.data limitation.
+      allow list: if isAdmin() || isLecturer();
+      allow create: if isLecturer() &&
+        request.resource.data.lecturerId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      // Lecturer can withdraw their own pending proposal; admin approves/rejects
+      allow update: if isAdmin() ||
+        (isLecturer() && resource.data.lecturerId == request.auth.uid &&
+         resource.data.status == 'pending');
+      allow delete: if isAdmin() ||
+        (isLecturer() && resource.data.lecturerId == request.auth.uid &&
+         resource.data.status == 'pending');
+    }
+
+    // ─── Notifications ────────────────────────────────────────────────────────
+
+    match /notifications/{id} {
+      // get (single-document read): only the recipient may access their own.
+      allow get: if isSignedIn() &&
+        resource.data.recipientId == request.auth.uid;
+      // list (query): any signed-in user may execute a query; the app always
+      // supplies a recipientId == uid filter, and Firestore returns only the
+      // matching documents. Keeping the list rule separate from get avoids the
+      // known Firestore limitation where resource.data is unavailable during
+      // query-plan evaluation, which would otherwise deny every list request.
+      allow list: if isSignedIn();
+      // System / admin creates notifications; lecturers can notify students
+      allow create: if isSignedIn();
+      // Mark as read (update) allowed for the recipient
+      allow update: if isSignedIn() &&
+        resource.data.recipientId == request.auth.uid;
+      // Recipients can delete their own; admin can delete any
+      allow delete: if isAdmin() ||
+        (isSignedIn() && resource.data.recipientId == request.auth.uid);
+    }
+
+    // ─── Security logs ────────────────────────────────────────────────────────
 
     match /security_logs/{id} {
       allow read: if isAdmin();
+      // Any signed-in user can write a log entry (attendance verification events)
       allow create: if isSignedIn();
+      // Logs are immutable — no updates or deletes (even for admin)
+      allow update, delete: if false;
+    }
+
+    // ─── App settings ─────────────────────────────────────────────────────────
+
+    match /settings/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }

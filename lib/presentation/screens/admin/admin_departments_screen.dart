@@ -1,28 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_attendance/core/theme/app_theme.dart';
+import 'package:smart_attendance/core/utils/snackbar_utils.dart';
 import 'package:smart_attendance/core/widgets/app_card.dart';
+import 'package:smart_attendance/data/services/department_migration_service.dart';
 import 'package:smart_attendance/domain/entities/department.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
 
-class AdminDepartmentsScreen extends ConsumerWidget {
+class AdminDepartmentsScreen extends ConsumerStatefulWidget {
   const AdminDepartmentsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminDepartmentsScreen> createState() =>
+      _AdminDepartmentsScreenState();
+}
+
+class _AdminDepartmentsScreenState
+    extends ConsumerState<AdminDepartmentsScreen> {
+  bool _migrating = false;
+
+  @override
+  Widget build(BuildContext context) {
     final departmentsAsync = ref.watch(_departmentsProvider);
 
     return Padding(
       padding: AppTheme.screenPadding,
       child: Column(
         children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton.icon(
-              onPressed: () => _showDialog(context, ref),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Department'),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _migrating ? null : _runMigration,
+                icon: _migrating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.build_outlined),
+                label: const Text('Backfill IDs'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _showDialog,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Department'),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Expanded(
@@ -33,15 +58,19 @@ class AdminDepartmentsScreen extends ConsumerWidget {
                 }
                 return ListView.separated(
                   itemCount: deps.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (_, i) {
                     final d = deps[i];
                     return AppCard(
                       child: ListTile(
                         title: Text(d.name),
+                        subtitle: Text(
+                          d.id,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _confirmDelete(context, ref, d),
+                          onPressed: () => _confirmDelete(d),
                         ),
                       ),
                     );
@@ -57,11 +86,32 @@ class AdminDepartmentsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDelete(
-    BuildContext context,
-    WidgetRef ref,
-    Department dept,
-  ) async {
+  Future<void> _runMigration() async {
+    setState(() => _migrating = true);
+    try {
+      final report = await DepartmentMigrationService().run();
+      if (!mounted) return;
+      if (report.allPassed) {
+        SnackbarUtils.showSuccess(
+          context,
+          'Backfill complete — ${report.verifyEntries.length} departments OK.',
+        );
+      } else {
+        SnackbarUtils.showError(
+          context,
+          '${report.verifyFailed} department(s) failed verification. '
+          'Check the debug console for details.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      SnackbarUtils.showError(context, 'Migration error: $e');
+    } finally {
+      if (mounted) setState(() => _migrating = false);
+    }
+  }
+
+  Future<void> _confirmDelete(Department dept) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -85,9 +135,9 @@ class AdminDepartmentsScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _showDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showDialog() async {
     final controller = TextEditingController();
-    await showDialog(
+    await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('New Department'),

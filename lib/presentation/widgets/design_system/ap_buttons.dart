@@ -20,7 +20,7 @@ class ApPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final baseColor = enabled ? Colors.white : Colors.white.withOpacity(0.65);
+    final baseColor = enabled ? Colors.white : Colors.white.withValues(alpha: 0.65);
     return SizedBox(
       width: double.infinity,
       height: 52,
@@ -28,17 +28,17 @@ class ApPrimaryButton extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           gradient: enabled ? AppTheme.primaryGradient : null,
-          color: enabled ? null : AppTheme.outline.withOpacity(0.18),
+          color: enabled ? null : AppTheme.outline.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(AppTheme.borderRadius),
           border: Border.all(
             color: enabled
                 ? Colors.transparent
-                : AppTheme.outline.withOpacity(0.6),
+                : AppTheme.outline.withValues(alpha: 0.6),
           ),
           boxShadow: enabled
               ? [
                   BoxShadow(
-                    color: AppTheme.primary.withOpacity(0.28),
+                    color: AppTheme.primary.withValues(alpha: 0.28),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -50,12 +50,12 @@ class ApPrimaryButton extends StatelessWidget {
           child: InkWell(
             onTap: enabled ? onPressed : null,
             borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-            splashColor: Colors.white.withOpacity(0.15),
+            splashColor: Colors.white.withValues(alpha: 0.15),
             child: Center(
               child: loading
                   ? Shimmer.fromColors(
-                      baseColor: Colors.white.withOpacity(0.35),
-                      highlightColor: Colors.white.withOpacity(0.85),
+                      baseColor: Colors.white.withValues(alpha: 0.35),
+                      highlightColor: Colors.white.withValues(alpha: 0.85),
                       child: Container(
                         width: 120,
                         height: 14,

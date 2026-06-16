@@ -28,12 +28,10 @@ class NotificationSettingsScreen extends ConsumerWidget {
       prefs.announcementsAlerts,
     ].where((v) => v).length;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Alert Settings')),
-      body: Column(
-        children: [
-          // Header with gradient
-          Container(
+    return Column(
+      children: [
+        // Header with gradient
+        Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             decoration: BoxDecoration(
@@ -215,8 +213,7 @@ class NotificationSettingsScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
+      );
   }
 
   Widget _sectionCard(

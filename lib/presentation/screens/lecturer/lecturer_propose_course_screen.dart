@@ -71,6 +71,9 @@ class _LecturerProposeCourseScreenState
     } on AppException catch (e) {
       if (!mounted) return;
       SnackbarUtils.showError(context, e.message);
+    } catch (e) {
+      if (!mounted) return;
+      SnackbarUtils.showError(context, 'Submission failed: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -142,6 +145,7 @@ class _LecturerProposeCourseScreenState
                   FirestoreDepartmentDropdown(
                     value: _departmentId,
                     onChanged: (v) => setState(() => _departmentId = v),
+                    returnId: true,
                   ),
                   const SizedBox(height: 16),
                   FilledButton(

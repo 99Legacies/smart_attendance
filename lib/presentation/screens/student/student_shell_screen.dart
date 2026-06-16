@@ -25,9 +25,22 @@ class StudentShellScreen extends ConsumerStatefulWidget {
 class _StudentShellScreenState extends ConsumerState<StudentShellScreen> {
   final _navigation = RoleShellNavigation(logTag: 'StudentShell');
   final _shellKey = GlobalKey<RoleShellScaffoldState>();
+  bool _syncStartQueued = false;
 
   void _openDrawerScreen(BuildContext context, Widget screen, String title) {
     AppNavigation.pushSecondary(context, title: title, body: screen);
+  }
+
+  void _startBackgroundSyncOnce() {
+    if (_syncStartQueued) return;
+    _syncStartQueued = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final svc = BackgroundSyncService();
+      if (!svc.isRunning) {
+        svc.start();
+      }
+    });
   }
 
   @override
@@ -43,7 +56,6 @@ class _StudentShellScreenState extends ConsumerState<StudentShellScreen> {
       ),
       data: (user) {
         if (user == null || user.role != UserRole.student) {
-          _navigation.resolve(role: UserRole.student, navItems: const []);
           return const GradientScaffold(
             body: Center(child: CircularProgressIndicator(color: Colors.white)),
           );
@@ -64,17 +76,16 @@ class _StudentShellScreenState extends ConsumerState<StudentShellScreen> {
             onScan: () => _shellKey.currentState?.navigateToTab(1),
             onHistory: () => _shellKey.currentState?.navigateToTab(2),
             onProfile: openProfile,
+            onCourses: () => _openDrawerScreen(
+              context,
+              MyCoursesScreen(studentUid: uid),
+              'My Courses',
+            ),
           ),
         );
         RoleNavigationConfig.assertValidItemCount(navItems, 'Student');
 
-        // Start background sync after navigation settled. Do not await.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final svc = BackgroundSyncService();
-          if (!svc.isRunning) {
-            svc.start();
-          }
-        });
+        _startBackgroundSyncOnce();
 
         return RoleShellScaffold(
           key: _shellKey,

@@ -31,7 +31,7 @@ class LecturerSessionsScreen extends ConsumerWidget {
           }
           return ListView.separated(
             itemCount: sessions.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, i) {
               final s = sessions[i];
               return AppCard(
@@ -271,13 +271,14 @@ final _lecturerSessionsProvider =
       return FirebaseFirestore.instance
           .collection(AppConstants.sessionsCollection)
           .where('lecturerId', isEqualTo: lecturerId)
-          .orderBy('startTime', descending: true)
           .snapshots()
-          .map(
-            (s) => s.docs
+          .map((s) {
+            final sessions = s.docs
                 .map((d) => AttendanceSessionModel.fromFirestore(d))
-                .toList(),
-          );
+                .toList()
+              ..sort((a, b) => b.startTime.compareTo(a.startTime));
+            return sessions;
+          });
     });
 
 // Watches a single session live from Firestore — updates when isActive changes

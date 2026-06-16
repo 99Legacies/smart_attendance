@@ -107,23 +107,33 @@ class ReportExportService {
     final timestamp = DateFormat('yyyyMMdd_HHmm').format(data.generatedAt);
     if (format == ReportExportFormat.excel) {
       final bytes = _buildExcel(data);
-      await Share.shareXFiles([
-        XFile.fromData(
-          bytes,
-          name: 'attendance_report_$timestamp.xlsx',
-          mimeType:
-              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              bytes,
+              name: 'attendance_report_$timestamp.xlsx',
+              mimeType:
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ),
+          ],
+          subject: data.title,
         ),
-      ], subject: data.title);
+      );
     } else {
       final bytes = await _buildPdf(data);
-      await Share.shareXFiles([
-        XFile.fromData(
-          bytes,
-          name: 'attendance_report_$timestamp.pdf',
-          mimeType: 'application/pdf',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              bytes,
+              name: 'attendance_report_$timestamp.pdf',
+              mimeType: 'application/pdf',
+            ),
+          ],
+          subject: data.title,
         ),
-      ], subject: data.title);
+      );
     }
   }
 
@@ -233,13 +243,13 @@ class ReportExportService {
             'Summary',
             style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
           ),
-          pw.Table.fromTextArray(data: data.summaryRows),
+          pw.TableHelper.fromTextArray(data: data.summaryRows),
           pw.SizedBox(height: 16),
           pw.Text(
             'Sessions (up to 500)',
             style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
           ),
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             data: data.sessionRows.take(50).toList(),
             cellStyle: const pw.TextStyle(fontSize: 8),
           ),
@@ -248,7 +258,7 @@ class ReportExportService {
             'Attendance records (up to 1000)',
             style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
           ),
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             data: data.recordRows.take(80).toList(),
             cellStyle: const pw.TextStyle(fontSize: 8),
           ),
