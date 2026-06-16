@@ -178,3 +178,19 @@ final studentEnrollmentCountProvider =
         return ids is List ? ids.length : 0;
       });
 });
+
+/// Streams the student's display name directly from the students/{uid}
+/// Firestore document. Used as the primary name source everywhere
+/// AuthUser.name may be null (e.g. after a profile-fetch timeout at login).
+final studentLiveNameProvider =
+    StreamProvider.autoDispose.family<String?, String>((ref, uid) {
+  if (uid.isEmpty) return Stream.value(null);
+  return FirebaseFirestore.instance
+      .collection(AppConstants.studentsCollection)
+      .doc(uid)
+      .snapshots()
+      .map((doc) {
+        final name = doc.data()?['name'] as String?;
+        return name?.isNotEmpty == true ? name : null;
+      });
+});

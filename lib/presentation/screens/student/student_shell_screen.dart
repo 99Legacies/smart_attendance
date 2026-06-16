@@ -47,6 +47,12 @@ class _StudentShellScreenState extends ConsumerState<StudentShellScreen> {
   Widget build(BuildContext context) {
     final authAsync = ref.watch(authStateProvider);
 
+    // Resolve UID early so we can stream the name before authAsync settles.
+    final uid = authAsync.asData?.value?.uid ?? '';
+    final liveName = uid.isNotEmpty
+        ? ref.watch(studentLiveNameProvider(uid)).asData?.value
+        : null;
+
     return authAsync.when(
       loading: () => const GradientScaffold(
         body: Center(child: CircularProgressIndicator(color: Colors.white)),
@@ -94,7 +100,9 @@ class _StudentShellScreenState extends ConsumerState<StudentShellScreen> {
           navItems: navItems,
           drawer: ConciseRoleDrawer(
             role: UserRole.student,
-            userName: user.name ?? 'Student',
+            userName: liveName?.isNotEmpty == true
+                ? liveName!
+                : (user.name?.isNotEmpty == true ? user.name! : 'Student'),
             userEmail: user.email,
             userId: uid,
             menuItems: [
