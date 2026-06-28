@@ -9,6 +9,7 @@ import 'package:smart_attendance/presentation/providers/providers.dart';
 import 'package:smart_attendance/presentation/screens/lecturer/lecturer_absence_inbox_screen.dart';
 import 'package:smart_attendance/presentation/screens/lecturer/lecturer_create_session_screen.dart';
 import 'package:smart_attendance/presentation/screens/lecturer/lecturer_home_screen.dart';
+import 'package:smart_attendance/presentation/screens/lecturer/lecturer_profile_screen.dart';
 import 'package:smart_attendance/presentation/screens/lecturer/lecturer_propose_course_screen.dart';
 import 'package:smart_attendance/presentation/screens/lecturer/lecturer_sessions_screen.dart';
 import 'package:smart_attendance/core/navigation/app_navigation.dart';
@@ -28,9 +29,20 @@ class LecturerShellScreen extends ConsumerStatefulWidget {
 class _LecturerShellScreenState extends ConsumerState<LecturerShellScreen> {
   final _navigation = RoleShellNavigation(logTag: 'LecturerShell');
   final _shellKey = GlobalKey<RoleShellScaffoldState>();
+  bool _syncStartQueued = false;
 
   void _openDrawerScreen(BuildContext context, Widget screen, String title) {
     AppNavigation.pushSecondary(context, title: title, body: screen);
+  }
+
+  void _startBackgroundSyncOnce() {
+    if (_syncStartQueued) return;
+    _syncStartQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final svc = BackgroundSyncService();
+      if (!svc.isRunning) svc.start();
+    });
   }
 
   @override
@@ -75,8 +87,18 @@ class _LecturerShellScreenState extends ConsumerState<LecturerShellScreen> {
           LecturerProposeCourseScreen(lecturerId: uid, lecturerName: name),
           'Propose course',
         );
+        void openProfile() => _openDrawerScreen(
+          context,
+          LecturerProfileScreen(lecturerId: uid),
+          'Profile',
+        );
 
         final drawerItems = [
+          DrawerMenuItem(
+            icon: Icons.person_outline,
+            label: 'My profile',
+            onTap: (_) => openProfile(),
+          ),
           DrawerMenuItem(
             icon: Icons.add_circle_outline,
             label: 'New session',
@@ -112,13 +134,7 @@ class _LecturerShellScreenState extends ConsumerState<LecturerShellScreen> {
         );
         RoleNavigationConfig.assertValidItemCount(navItems, 'Lecturer');
 
-        // Start background sync after navigation settled. Do not await.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final svc = BackgroundSyncService();
-          if (!svc.isRunning) {
-            svc.start();
-          }
-        });
+        _startBackgroundSyncOnce();
 
         return RoleShellScaffold(
           key: _shellKey,

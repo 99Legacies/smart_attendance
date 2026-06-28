@@ -11,6 +11,7 @@ import 'package:smart_attendance/domain/entities/attendance_session.dart';
 import 'package:smart_attendance/core/errors/app_exception.dart';
 import 'package:smart_attendance/core/utils/snackbar_utils.dart';
 import 'package:smart_attendance/domain/entities/course.dart';
+import 'package:smart_attendance/domain/entities/student.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
 
 class LecturerSessionsScreen extends ConsumerWidget {
@@ -21,6 +22,10 @@ class LecturerSessionsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionsAsync = ref.watch(_lecturerSessionsProvider(lecturerId));
+    final courseMap = {
+      for (final c in ref.watch(_allCoursesProvider).asData?.value ?? <Course>[])
+        c.id: c,
+    };
 
     return Padding(
       padding: AppTheme.screenPadding,
@@ -34,10 +39,16 @@ class LecturerSessionsScreen extends ConsumerWidget {
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, i) {
               final s = sessions[i];
+              final course = courseMap[s.courseId];
+              final courseLabel = course == null
+                  ? s.courseId
+                  : course.courseCode != null
+                      ? '${course.courseCode} — ${course.name}'
+                      : course.name;
               return AppCard(
                 onTap: () => _openSessionDetail(context, s.id),
                 child: ListTile(
-                  title: Text('Course: ${s.courseId}'),
+                  title: Text(courseLabel),
                   subtitle: Text(
                     '${DateFormat.yMMMd().add_jm().format(s.startTime)} — '
                     '${s.isActive ? "Active" : "Ended"}',
@@ -220,15 +231,7 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
                     }
                     return Column(
                       children: records
-                          .map(
-                            (r) => ListTile(
-                              title: Text(r.studentId),
-                              subtitle: Text(r.status.label),
-                              trailing: Text(
-                                DateFormat.Hm().format(r.timestamp),
-                              ),
-                            ),
-                          )
+                          .map((r) => _StudentRecordTile(record: r))
                           .toList(),
                     );
                   },
@@ -239,6 +242,38 @@ class _SessionDetailSheetState extends ConsumerState<_SessionDetailSheet> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _StudentRecordTile extends ConsumerWidget {
+  const _StudentRecordTile({required this.record});
+
+  final AttendanceRecord record;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final studentAsync = ref.watch(_studentProvider(record.studentId));
+    return studentAsync.when(
+      data: (student) => ListTile(
+        title: Text(student?.name ?? record.studentId),
+        subtitle: Text(
+          student != null
+              ? '${student.studentId} · ${record.status.label}'
+              : record.status.label,
+        ),
+        trailing: Text(DateFormat.Hm().format(record.timestamp)),
+      ),
+      loading: () => ListTile(
+        title: const Text('Loading…'),
+        subtitle: Text(record.status.label),
+        trailing: Text(DateFormat.Hm().format(record.timestamp)),
+      ),
+      error: (_, _) => ListTile(
+        title: const Text('Unknown student'),
+        subtitle: Text(record.status.label),
+        trailing: Text(DateFormat.Hm().format(record.timestamp)),
       ),
     );
   }
@@ -306,4 +341,8 @@ final _sessionStatsProvider = FutureProvider.family<Map<String, int>, String>((
   sessionId,
 ) {
   return ref.watch(attendanceRepositoryProvider).getSessionStats(sessionId);
+});
+
+final _studentProvider = FutureProvider.family<Student?, String>((ref, uid) {
+  return ref.read(catalogRepositoryProvider).getStudent(uid);
 });

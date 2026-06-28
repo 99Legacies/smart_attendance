@@ -25,6 +25,22 @@ import 'package:smart_attendance/domain/repositories/user_repository.dart';
 import 'package:smart_attendance/domain/entities/app_notification.dart';
 import 'package:smart_attendance/domain/usecases/mark_attendance_usecase.dart';
 
+/// True while a login dialog (device conflict, biometric failure) is visible.
+/// GoRouter's redirect checks this flag and returns null (no redirect) while
+/// the flag is set, preventing the router from navigating away mid-dialog.
+final loginDialogActiveProvider =
+    NotifierProvider<LoginDialogActiveNotifier, bool>(
+  LoginDialogActiveNotifier.new,
+);
+
+class LoginDialogActiveNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void activate() => state = true;
+  void deactivate() => state = false;
+}
+
 final deviceServiceProvider = Provider<DeviceService>((ref) => DeviceService());
 
 final locationServiceProvider = Provider<LocationService>(

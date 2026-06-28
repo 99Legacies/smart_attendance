@@ -154,6 +154,13 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to submit request. Check your connection and try again.'),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

@@ -40,7 +40,7 @@ class LecturerAnalyticsScreen extends ConsumerWidget {
               crossAxisCount: MediaQuery.sizeOf(context).width > 600 ? 3 : 2,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
-              childAspectRatio: 2.8,
+              childAspectRatio: 2.2,
               children: [
                 _StatCard('Sessions', stats.sessions, Icons.event),
                 _StatCard('Records', stats.records, Icons.fact_check),
@@ -85,12 +85,16 @@ class _StatCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  '$value',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '$value',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
                 ),
                 Text(
                   label,

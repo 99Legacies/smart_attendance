@@ -4,6 +4,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_attendance/core/constants/app_constants.dart';
 import 'package:smart_attendance/core/theme/app_theme.dart';
+import 'package:smart_attendance/data/models/student_model.dart';
+import 'package:smart_attendance/domain/entities/student.dart';
 import 'package:smart_attendance/presentation/widgets/design_system/app_card.dart';
 
 // ─── Data model ──────────────────────────────────────────────────────────────
@@ -19,7 +21,60 @@ class _HomeStats {
   final int absences;
 }
 
+typedef _CourseStat = ({
+  String courseId,
+  String name,
+  String? code,
+  int count,
+});
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
+
+final _courseStudentStatsProvider =
+    FutureProvider.autoDispose.family<List<_CourseStat>, String>((
+  ref,
+  lecturerId,
+) async {
+  final db = FirebaseFirestore.instance;
+  final lecturerDoc = await db
+      .collection(AppConstants.lecturersCollection)
+      .doc(lecturerId)
+      .get();
+  final courseIds = List<String>.from(
+    lecturerDoc.data()?['courseIds'] as List? ?? [],
+  );
+  if (courseIds.isEmpty) return [];
+  final results = await Future.wait(
+    courseIds.map((courseId) async {
+      final courseDoc = await db
+          .collection(AppConstants.coursesCollection)
+          .doc(courseId)
+          .get();
+      final name = courseDoc.data()?['name'] as String? ?? courseId;
+      final code = courseDoc.data()?['courseCode'] as String?;
+      final studentsSnap = await db
+          .collection(AppConstants.studentsCollection)
+          .where('courseIds', arrayContains: courseId)
+          .get();
+      return (
+        courseId: courseId,
+        name: name,
+        code: code,
+        count: studentsSnap.docs.length,
+      );
+    }),
+  );
+  return results;
+});
+
+final _courseStudentsStreamProvider =
+    StreamProvider.autoDispose.family<List<Student>, String>((ref, courseId) {
+  return FirebaseFirestore.instance
+      .collection(AppConstants.studentsCollection)
+      .where('courseIds', arrayContains: courseId)
+      .snapshots()
+      .map((s) => s.docs.map((d) => StudentModel.fromFirestore(d)).toList());
+});
 
 final _lecturerHomeStatsProvider =
     FutureProvider.autoDispose.family<_HomeStats, String>((ref, lecturerId) async {
@@ -117,6 +172,12 @@ class LecturerHomeScreen extends ConsumerWidget {
                   label: 'Students',
                   value: '${stats.students}',
                   color: AppTheme.secondary,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          _StudentsByCoursePage(lecturerId: lecturerId),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 10),
                 _StatMini(
@@ -359,6 +420,122 @@ class _ActionTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Students by Course pages ─────────────────────────────────────────────────
+
+class _StudentsByCoursePage extends ConsumerWidget {
+  const _StudentsByCoursePage({required this.lecturerId});
+  final String lecturerId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statsAsync = ref.watch(_courseStudentStatsProvider(lecturerId));
+    return Scaffold(
+      appBar: AppBar(title: const Text('Students by Course')),
+      body: statsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+        data: (stats) {
+          if (stats.isEmpty) {
+            return const Center(child: Text('No courses assigned.'));
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: stats.length,
+            separatorBuilder: (_, i) => const SizedBox(height: 8),
+            itemBuilder: (context, i) {
+              final s = stats[i];
+              final label =
+                  s.code != null ? '${s.code} — ${s.name}' : s.name;
+              return AppCard(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _CourseStudentListPage(
+                      courseId: s.courseId,
+                      courseName: label,
+                    ),
+                  ),
+                ),
+                child: ListTile(
+                  title: Text(label),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.secondary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${s.count}',
+                          style: TextStyle(
+                            color: AppTheme.secondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CourseStudentListPage extends ConsumerWidget {
+  const _CourseStudentListPage({
+    required this.courseId,
+    required this.courseName,
+  });
+
+  final String courseId;
+  final String courseName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final studentsAsync =
+        ref.watch(_courseStudentsStreamProvider(courseId));
+    return Scaffold(
+      appBar: AppBar(title: Text(courseName)),
+      body: studentsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+        data: (students) {
+          if (students.isEmpty) {
+            return const Center(child: Text('No students enrolled.'));
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: students.length,
+            separatorBuilder: (_, i) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final s = students[i];
+              return ListTile(
+                leading: CircleAvatar(
+                  child: Text(
+                    s.name.isNotEmpty ? s.name[0].toUpperCase() : '?',
+                  ),
+                ),
+                title: Text(s.name),
+                subtitle: Text(s.studentId),
+              );
+            },
+          );
+        },
       ),
     );
   }

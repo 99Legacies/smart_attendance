@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:smart_attendance/core/theme/app_theme.dart';
 import 'package:smart_attendance/core/widgets/app_card.dart';
 import 'package:smart_attendance/domain/entities/attendance_record.dart';
+import 'package:smart_attendance/domain/entities/course.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
 import 'package:smart_attendance/presentation/widgets/design_system/ap_loading.dart';
 
@@ -15,6 +16,7 @@ class StudentHistoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recordsAsync = ref.watch(_studentRecordsProvider(studentUid));
+    final courses = ref.watch(_historyCoursesProvider).asData?.value;
 
     return Padding(
       padding: AppTheme.screenPadding,
@@ -28,6 +30,14 @@ class StudentHistoryScreen extends ConsumerWidget {
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, i) {
               final r = records[i];
+              final course = courses
+                  ?.where((c) => c.id == r.courseId)
+                  .firstOrNull;
+              final courseLabel = course != null
+                  ? (course.courseCode?.isNotEmpty == true
+                      ? course.courseCode!
+                      : course.name)
+                  : null;
               return AppCard(
                 child: ListTile(
                   leading: _statusIcon(r.status.name),
@@ -35,10 +45,12 @@ class StudentHistoryScreen extends ConsumerWidget {
                   subtitle: Text(
                     DateFormat.yMMMd().add_jm().format(r.timestamp),
                   ),
-                  trailing: Text(
-                    r.courseId ?? r.sessionId,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  trailing: courseLabel != null
+                      ? Text(
+                          courseLabel,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        )
+                      : null,
                 ),
               );
             },
@@ -83,3 +95,7 @@ final _studentRecordsProvider =
           .watch(attendanceRepositoryProvider)
           .watchRecordsForStudent(uid);
     });
+
+final _historyCoursesProvider = StreamProvider<List<Course>>((ref) {
+  return ref.watch(catalogRepositoryProvider).watchCourses();
+});

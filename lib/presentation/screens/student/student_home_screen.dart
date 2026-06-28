@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -262,51 +261,56 @@ class StudentHomeScreen extends ConsumerWidget {
           const SizedBox(height: 20),
           Text('Quick actions', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: kIsWeb ? 4 : 2,
-            mainAxisSpacing: kIsWeb ? 8 : 12,
-            crossAxisSpacing: kIsWeb ? 8 : 12,
-            childAspectRatio: kIsWeb ? 2.5 : 1.05,
-            children: [
-              _QuickAction(
-                icon: Icons.qr_code_scanner_rounded,
-                label: 'Scan QR',
-                gradient: AppTheme.primaryGradient,
-                onTap: onScan,
-                delay: 0,
-                compact: kIsWeb,
-              ),
-              _QuickAction(
-                icon: Icons.history_rounded,
-                label: 'History',
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF7C3AED), Color(0xFF5B6BF8)],
-                ),
-                onTap: onHistory,
-                delay: 50,
-                compact: kIsWeb,
-              ),
-              _QuickAction(
-                icon: Icons.person_outline_rounded,
-                label: 'Profile',
-                gradient: AppTheme.successGradient,
-                onTap: onProfile,
-                delay: 100,
-                compact: kIsWeb,
-              ),
-              _QuickAction(
-                icon: Icons.school_outlined,
-                label: 'Courses',
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFF59E0B), Color(0xFFF43F5E)],
-                ),
-                onTap: onCourses,
-                delay: 150,
-                compact: kIsWeb,
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 560;
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: wide ? 4 : 2,
+                mainAxisSpacing: wide ? 8 : 12,
+                crossAxisSpacing: wide ? 8 : 12,
+                childAspectRatio: wide ? 2.5 : 1.05,
+                children: [
+                  _QuickAction(
+                    icon: Icons.qr_code_scanner_rounded,
+                    label: 'Scan QR',
+                    gradient: AppTheme.primaryGradient,
+                    onTap: onScan,
+                    delay: 0,
+                    compact: wide,
+                  ),
+                  _QuickAction(
+                    icon: Icons.history_rounded,
+                    label: 'History',
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF7C3AED), Color(0xFF5B6BF8)],
+                    ),
+                    onTap: onHistory,
+                    delay: 50,
+                    compact: wide,
+                  ),
+                  _QuickAction(
+                    icon: Icons.person_outline_rounded,
+                    label: 'Profile',
+                    gradient: AppTheme.successGradient,
+                    onTap: onProfile,
+                    delay: 100,
+                    compact: wide,
+                  ),
+                  _QuickAction(
+                    icon: Icons.school_outlined,
+                    label: 'Courses',
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFF59E0B), Color(0xFFF43F5E)],
+                    ),
+                    onTap: onCourses,
+                    delay: 150,
+                    compact: wide,
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 24),
           Text(
@@ -454,7 +458,13 @@ class _QuickAction extends StatelessWidget {
               children: [
                 iconBox,
                 const SizedBox(width: 8),
-                Text(label, style: Theme.of(context).textTheme.labelMedium),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             )
           : Column(
@@ -585,12 +595,12 @@ class _AttendanceRateCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
                   children: [
                     _StatusDot(color: AppTheme.present, label: 'Present'),
-                    const SizedBox(width: 12),
                     _StatusDot(color: AppTheme.late, label: 'Late'),
-                    const SizedBox(width: 12),
                     _StatusDot(color: AppTheme.absent, label: 'Absent'),
                   ],
                 ),

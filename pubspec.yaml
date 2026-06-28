@@ -15,15 +15,16 @@ dependencies:
   firebase_core: ^4.10.0
   firebase_auth: ^6.5.2
   cloud_firestore: ^6.5.0
+  cloud_functions: ^6.0.2
   firebase_storage: ^13.4.2
   geolocator: ^14.0.2
   mobile_scanner: ^7.2.0
   qr_flutter: ^4.1.0
-  device_info_plus: ^12.4.0
+  device_info_plus: ^13.1.0
   uuid: ^4.5.1
   intl: ^0.20.2
   shared_preferences: ^2.5.3
-  file_picker: ^11.0.2
+  file_picker: ^12.0.0-beta.7
   equatable: ^2.0.7
   crypto: ^3.0.6
   google_fonts: ^8.1.0
@@ -31,15 +32,16 @@ dependencies:
   pdf: ^3.11.3
   excel: ^4.0.6
   path_provider: ^2.1.5
-  share_plus: ^11.0.0
+  share_plus: ^13.1.0
   hive: ^2.2.3
   hive_flutter: ^1.1.0
-  connectivity_plus: ^6.0.0
+  connectivity_plus: ^7.1.1
   image_picker: ^1.2.2
   image: ^4.3.0
   flutter_animate: ^4.5.2
   shimmer: ^3.0.0
-  fl_chart: ^0.68.0
+  fl_chart: ^1.2.0
+  local_auth: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -63,8 +65,8 @@ flutter_launcher_icons:
     image_path: assets/images/App_icon.png
   image_path: assets/images/App_icon.png
   remove_alpha_ios: true
-  background_color: "#0A0F1E"
-  adaptive_icon_background: "#5B6BF8"
+  background_color: "#FFFFFF"
+  adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: assets/images/App_icon.png
 
 flutter:

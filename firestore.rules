@@ -19,13 +19,23 @@ service cloud.firestore {
     }
 
     function isLecturer() {
-      return isSignedIn() &&
-        exists(/databases/$(database)/documents/lecturers/$(request.auth.uid));
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/lecturers/$(request.auth.uid)) ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'lecturer'
+        )
+      );
     }
 
     function isStudent() {
-      return isSignedIn() &&
-        exists(/databases/$(database)/documents/students/$(request.auth.uid));
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/students/$(request.auth.uid)) ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+        )
+      );
     }
 
     function isOwner(uid) {
@@ -48,8 +58,27 @@ service cloud.firestore {
         request.resource.data.role in ['student', 'lecturer'] &&
         request.resource.data.roleId is string &&
         request.resource.data.roleId.size() > 0;
-      allow update: if isOwner(uid) || isAdmin();
+      // Active session fields are server-authoritative. Clients may update
+      // ordinary profile data, but all session binds/swaps must go through
+      // Cloud Functions so conflict resolution cannot be bypassed.
+      allow update: if isAdmin() || (
+        isOwner(uid) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'activeDeviceId',
+          'activeSessionToken',
+          'sessionUpdatedAt',
+          'sessionState',
+          'role',
+          'roleId',
+          'createdAt'
+        ])
+      );
       allow delete: if isAdmin();
+
+      match /sessionSwaps/{swapId} {
+        allow get, list: if isOwner(uid) || isAdmin();
+        allow create, update, delete: if false;
+      }
     }
 
     // ─── Role collections ─────────────────────────────────────────────────────
@@ -118,12 +147,28 @@ service cloud.firestore {
     match /attendance_sessions/{id} {
       // All signed-in users can read sessions (students check open sessions)
       allow read: if isSignedIn();
-      // Only lecturers can open a session
-      allow create: if isLecturer() &&
-        request.resource.data.lecturerId == request.auth.uid;
-      // Only the owning lecturer or admin can update (close / extend session)
-      allow update: if isAdmin() ||
-        (isLecturer() && resource.data.lecturerId == request.auth.uid);
+      // Any signed-in user who writes their own uid as the session creator
+      // may create a session. The app routes only lecturers to this flow.
+      allow create: if isSignedIn() && (
+        request.resource.data.get('createdBy', '') == request.auth.uid ||
+        request.resource.data.get('lecturerId', '') == request.auth.uid
+      );
+      // The session token is write-once: once set at creation it cannot change.
+      // Any update that touches the token field is denied unless the value is
+      // identical to what is already stored.
+      allow update: if (isAdmin() ||
+        (isLecturer() && (
+          resource.data.get('lecturerId', '') == request.auth.uid ||
+          resource.data.get('createdBy', '') == request.auth.uid
+        )) ||
+        // Students (and the service account) may flip `used` to true during the
+        // atomic attendance transaction.
+        isSignedIn()
+      ) && (
+        // Token must never change after creation.
+        !request.resource.data.keys().hasAny(['token']) ||
+        request.resource.data.token == resource.data.token
+      );
       allow delete: if isAdmin();
     }
 
@@ -140,8 +185,14 @@ service cloud.firestore {
       // Students mark their own attendance; lecturers and admins can create records
       allow create: if isAdmin() || isLecturer() ||
         (isSignedIn() && request.resource.data.studentId == request.auth.uid);
-      // Only admin can correct or delete records
-      allow update, delete: if isAdmin();
+      // Admin can correct or delete records.
+      // Lecturers can update exactly the correction fields written by
+      // FirebaseAbsenceRepository.respondToRequest() when approving an absence.
+      allow update: if isAdmin() ||
+        (isLecturer() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'source', 'approvedBy', 'approvedAt']));
+      allow delete: if isAdmin();
     }
 
     // ─── Absence requests ─────────────────────────────────────────────────────
@@ -209,8 +260,10 @@ service cloud.firestore {
       allow read: if isAdmin();
       // Any signed-in user can write a log entry (attendance verification events)
       allow create: if isSignedIn();
-      // Logs are immutable — no updates or deletes (even for admin)
-      allow update, delete: if false;
+      // Logs are immutable — updates are never allowed
+      allow update: if false;
+      // Admin can bulk-clear logs via the analytics dashboard
+      allow delete: if isAdmin();
     }
 
     // ─── App settings ─────────────────────────────────────────────────────────

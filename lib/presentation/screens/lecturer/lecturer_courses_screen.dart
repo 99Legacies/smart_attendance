@@ -135,6 +135,7 @@ class _CourseListState extends ConsumerState<_CourseList> {
               'My Courses (${myCourses.length})',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
             ),
             const SizedBox(height: 8),

@@ -37,6 +37,7 @@ class AttendanceSessionModel extends AttendanceSession {
   Map<String, dynamic> toFirestore() => {
         'courseId': courseId,
         'lecturerId': lecturerId,
+        'createdBy': lecturerId,
         'startTime': Timestamp.fromDate(startTime),
         'endTime': Timestamp.fromDate(endTime),
         'qrToken': qrToken,

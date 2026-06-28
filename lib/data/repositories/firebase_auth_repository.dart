@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_attendance/core/constants/app_constants.dart';
 import 'package:smart_attendance/core/constants/preset_departments.dart';
 import 'package:smart_attendance/core/errors/app_exception.dart';
@@ -16,21 +18,29 @@ import 'package:smart_attendance/domain/entities/app_user.dart';
 import 'package:smart_attendance/domain/entities/user_role.dart';
 import 'package:smart_attendance/domain/repositories/auth_repository.dart';
 import 'package:smart_attendance/domain/repositories/catalog_repository.dart';
+import 'package:smart_attendance/features/auth/services/session_guard.dart';
 
 class FirebaseAuthRepository implements AuthRepository {
   FirebaseAuthRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
     this._catalog,
     LocalUserDataSource? localUserDataSource,
   }) : _auth = auth ?? (Firebase.apps.isEmpty ? null : FirebaseAuth.instance),
        _firestore =
            firestore ??
            (Firebase.apps.isEmpty ? null : FirebaseFirestore.instance),
+       _functions =
+           functions ??
+           (Firebase.apps.isEmpty
+               ? null
+               : FirebaseFunctions.instanceFor(region: 'us-central1')),
        _localUserDataSource = localUserDataSource ?? LocalUserDataSource();
 
   final FirebaseAuth? _auth;
   final FirebaseFirestore? _firestore;
+  final FirebaseFunctions? _functions;
   final CatalogRepository? _catalog;
   final LocalUserDataSource _localUserDataSource;
 
@@ -520,8 +530,45 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> signOut() async {
-    await SessionCacheService.clearSession();
-    await _auth?.signOut();
+    try {
+      final uid = _auth?.currentUser?.uid;
+      SessionGuard.stop();
+
+      if (uid != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final localDeviceId = prefs.getString('_sid') ?? '';
+
+        // Only the backend may clear active session fields. It verifies that
+        // this device is still the active one before releasing the binding.
+        if (localDeviceId.isNotEmpty) {
+          try {
+            await _functions
+                ?.httpsCallable(
+                  'releaseSession',
+                  options: HttpsCallableOptions(
+                    timeout: const Duration(seconds: 10),
+                  ),
+                )
+                .call<void>({'deviceId': localDeviceId});
+          } catch (e) {
+            developer.log(
+              'Failed to clear device binding on logout: $e',
+              name: 'FirebaseAuth',
+            );
+          }
+        }
+
+        await prefs.remove('_sid');
+        await prefs.remove('_stk');
+      }
+
+      await SessionCacheService.clearSession();
+      await _auth?.signOut();
+    } catch (e) {
+      developer.log('Logout error (non-critical): $e', name: 'FirebaseAuth');
+      await SessionCacheService.clearSession();
+      await _auth?.signOut();
+    }
   }
 
   @override

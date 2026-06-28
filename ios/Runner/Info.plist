@@ -51,6 +51,8 @@
 		<string>Scan attendance QR codes</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>Verify you are on campus for attendance</string>
+		<key>NSFaceIDUsageDescription</key>
+		<string>Used to verify your identity when logging in.</string>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>UILaunchStoryboardName</key>

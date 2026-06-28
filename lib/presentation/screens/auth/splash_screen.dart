@@ -45,13 +45,17 @@ class SplashScreen extends ConsumerWidget {
                           child: child,
                         ),
                       ),
-                      child: Image.asset(
-                            'assets/images/splash_screen.png',
-                            width: MediaQuery.of(context).size.width * 0.55,
-                            fit: BoxFit.contain,
-                          )
-                          .animate(onPlay: (c) => c.repeat(reverse: true))
-                          .shimmer(duration: 2000.ms, color: Colors.white24),
+                      child: Hero(
+                        tag: 'app-logo',
+                        flightShuttleBuilder: _logoShuttle,
+                        child: Image.asset(
+                              'assets/images/App_login.png',
+                              width: MediaQuery.of(context).size.width * 0.55,
+                              fit: BoxFit.contain,
+                            )
+                            .animate(onPlay: (c) => c.repeat(reverse: true))
+                            .shimmer(duration: 2000.ms, color: Colors.white24),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -85,5 +89,17 @@ class SplashScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  // During the Hero flight, render just the raw image so the shimmer
+  // animate loop doesn't interfere with the morph interpolation.
+  static Widget _logoShuttle(
+    BuildContext flightContext,
+    Animation<double> animation,
+    HeroFlightDirection flightDirection,
+    BuildContext fromHeroContext,
+    BuildContext toHeroContext,
+  ) {
+    return Image.asset('assets/images/App_login.png', fit: BoxFit.contain);
   }
 }

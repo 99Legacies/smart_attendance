@@ -68,10 +68,13 @@ class ApAuthLayout extends StatelessWidget {
 class _Logo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/images/App_login.png',
-      width: MediaQuery.of(context).size.width * 0.35,
-      fit: BoxFit.contain,
+    return Hero(
+      tag: 'app-logo',
+      child: Image.asset(
+        'assets/images/App_login.png',
+        width: (MediaQuery.of(context).size.width * 0.35).clamp(100.0, 180.0),
+        fit: BoxFit.contain,
+      ),
     );
   }
 }

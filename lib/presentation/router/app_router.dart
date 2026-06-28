@@ -28,32 +28,49 @@ CustomTransitionPage<T> _fadePage<T>(
     child: child,
     transitionDuration: const Duration(milliseconds: 350),
     reverseTransitionDuration: const Duration(milliseconds: 250),
-    transitionsBuilder: (_, animation, _, child) => FadeTransition(
-      opacity: CurveTween(curve: Curves.easeInOut).animate(animation),
-      child: child,
+    transitionsBuilder: (ctx, anim, secondaryAnim, transChild) => FadeTransition(
+      opacity: CurveTween(curve: Curves.easeInOut).animate(anim),
+      child: transChild,
     ),
   );
 }
 
-// The notifier is kept alive at the app level so GoRouter always has a valid
-// ChangeNotifier to listen to. routerProvider updates it every time
-// authStateProvider emits a meaningfully different value.
+// Auth-state notifier — GoRouter listens to this and re-runs redirect only
+// when the user identity or loading/error state actually changes.
 final _routerRefreshNotifier = _AuthStateRefreshNotifier();
 
+// Notifier that fires when loginDialogActiveProvider changes so GoRouter
+// re-evaluates the redirect and suppresses navigation while a dialog is open.
+final _loginDialogNotifier = _LoginDialogChangeNotifier();
+
+/// Exposes the root navigator key so callers (e.g. LoginScreen) can push
+/// modal routes (BiometricSetupScreen) on top of GoRouter-managed pages.
+final navigatorKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
-  // Watch authStateProvider — this rebuilds routerProvider on every emission.
-  // We then push the new state into the notifier, which tells GoRouter to
-  // re-run redirect ONLY when the user/role/loading state actually changed.
   ref.listen<AsyncValue<AuthUser?>>(
     authStateProvider,
     (_, next) => _routerRefreshNotifier.update(next),
     fireImmediately: true,
   );
 
+  // Re-trigger GoRouter redirect whenever a login dialog is shown/hidden.
+  ref.listen<bool>(loginDialogActiveProvider, (prev, next) {
+    _loginDialogNotifier.ping();
+  });
+
   return GoRouter(
+    navigatorKey: navigatorKey,
     initialLocation: '/',
-    refreshListenable: _routerRefreshNotifier,
+    refreshListenable: Listenable.merge([
+      _routerRefreshNotifier,
+      _loginDialogNotifier,
+    ]),
     redirect: (context, state) {
+      // Suppress all redirects while a device-conflict or biometric dialog
+      // is showing — the login screen resolves those dialogs first.
+      if (ref.read(loginDialogActiveProvider)) return null;
+
       final authState =
           _routerRefreshNotifier.state ?? const AsyncValue.loading();
       final path = state.matchedLocation;
@@ -69,13 +86,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           path.startsWith('/admin-dashboard') ||
           path.startsWith('/admin');
 
-      // Still loading — never redirect
       if (authState.isLoading) return null;
-
-      // No value yet (stream hasn't emitted first value) — don't redirect
       if (!authState.hasValue) return null;
 
-      // Auth errored — stay on auth/splash/dashboard, go to login elsewhere
       if (authState.hasError) {
         if (isAuthRoute || onSplash || onDashboard) return null;
         return '/login';
@@ -84,17 +97,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       final user = authState.value;
 
       if (user == null) {
-        // Auth has resolved to "no user" — redirect to login from any route
-        // except pages that are already part of the auth flow.
         if (isAuthRoute) return null;
         return '/login';
       }
 
-      // Authenticated — navigate away from splash/auth to role home
       final roleHome = RoleRoutes.homeFor(user.role);
       if (isAuthRoute || onSplash) return roleHome;
 
-      // Prevent cross-role access
       if (user.role == UserRole.student &&
           (path.startsWith('/admin') || path.startsWith('/lecturer'))) {
         return '/student-dashboard';
@@ -119,7 +128,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/login',
-        pageBuilder: (ctx, state) => _fadePage(ctx, state, const LoginScreen()),
+        pageBuilder: (ctx, state) => _fadePage(
+          ctx,
+          state,
+          // Pass the session-expired reason (if any) down to the login screen.
+          LoginScreen(logoutReason: state.extra as String?),
+        ),
       ),
       GoRoute(
         path: '/signup',
@@ -176,10 +190,6 @@ class AdminUsersShellScreen extends ConsumerWidget {
   }
 }
 
-// Notifies GoRouter only when the resolved AuthUser meaningfully changes.
-// Fires on: loading→data, user present→null, uid/role change, error state.
-// Does NOT fire on mid-fetch null emissions or token refreshes where the
-// user identity hasn't actually changed.
 class _AuthStateRefreshNotifier extends ChangeNotifier {
   AsyncValue<AuthUser?>? _state;
 
@@ -188,7 +198,6 @@ class _AuthStateRefreshNotifier extends ChangeNotifier {
   void update(AsyncValue<AuthUser?> next) {
     final prev = _state;
     if (prev == null) {
-      // First emission — always notify so router runs initial redirect
       _state = next;
       notifyListeners();
       return;
@@ -206,4 +215,8 @@ class _AuthStateRefreshNotifier extends ChangeNotifier {
     _state = next;
     if (changed) notifyListeners();
   }
+}
+
+class _LoginDialogChangeNotifier extends ChangeNotifier {
+  void ping() => notifyListeners();
 }

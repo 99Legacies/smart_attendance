@@ -47,17 +47,20 @@ class _StudentScanScreenState extends ConsumerState<StudentScanScreen> {
             longitude: position.longitude,
             deviceId: deviceId,
           );
+      if (!mounted) return;
       setState(() {
         _success = true;
         _lastMessage =
             'Attendance marked: ${record.status.label} at ${record.timestamp}';
       });
     } on AppException catch (e) {
+      if (!mounted) return;
       setState(() {
         _success = false;
         _lastMessage = e.message;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _success = false;
         _lastMessage = 'Failed to mark attendance. Check GPS and try again.';

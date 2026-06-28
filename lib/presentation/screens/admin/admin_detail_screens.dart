@@ -13,7 +13,9 @@ import 'package:smart_attendance/domain/entities/attendance_session.dart';
 import 'package:smart_attendance/domain/entities/course.dart';
 import 'package:smart_attendance/data/models/department_model.dart';
 import 'package:smart_attendance/domain/entities/department.dart';
+import 'package:smart_attendance/data/models/lecturer_model.dart';
 import 'package:smart_attendance/domain/entities/lecturer.dart';
+import 'package:smart_attendance/domain/entities/app_user.dart';
 import 'package:smart_attendance/domain/entities/security_log.dart';
 import 'package:smart_attendance/domain/entities/student.dart';
 import 'package:smart_attendance/presentation/providers/providers.dart';
@@ -24,6 +26,7 @@ class AdminStudentsDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final studentsAsync = ref.watch(_studentsProvider);
+    final departments = ref.watch(_departmentsProvider).asData?.value;
 
     return Padding(
       padding: AppTheme.screenPadding,
@@ -48,6 +51,11 @@ class AdminStudentsDetailScreen extends ConsumerWidget {
                         const SizedBox(height: 12),
                     itemBuilder: (_, index) {
                       final student = students[index];
+                      final deptName = departments
+                              ?.where((d) => d.id == student.departmentId)
+                              .firstOrNull
+                              ?.name ??
+                          '—';
                       return AppCard(
                         child: ListTile(
                           title: Text(student.name),
@@ -55,7 +63,7 @@ class AdminStudentsDetailScreen extends ConsumerWidget {
                             '${student.studentId} • ${student.email}',
                           ),
                           trailing: Text(
-                            student.departmentId,
+                            deptName,
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ),
@@ -326,6 +334,16 @@ class _AdminSessionsDetailScreenState
             ),
           ),
           const SizedBox(height: 16),
+          _DangerButton(
+            label: 'Clear all sessions',
+            icon: Icons.delete_sweep_outlined,
+            confirmTitle: 'Clear all sessions?',
+            confirmBody:
+                'This will permanently delete every attendance session and cannot be undone.',
+            collection: AppConstants.sessionsCollection,
+            successMsg: 'All sessions cleared.',
+          ),
+          const SizedBox(height: 16),
           Expanded(
             child: sessionsAsync.when(
               data: (sessions) {
@@ -371,7 +389,7 @@ class _AdminSessionsDetailScreenState
                             final session = visibleSessions[index];
                             final lecturer = lecturers.firstWhere(
                               (item) => item.id == session.lecturerId,
-                              orElse: () => Lecturer(
+                              orElse: () => LecturerModel(
                                 id: session.lecturerId,
                                 name: 'Unknown lecturer',
                                 lecturerId: session.lecturerId,
@@ -484,6 +502,9 @@ class AdminRecordsDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recordsAsync = ref.watch(_recordsProvider);
+    final allUsers = ref.watch(_allUsersProvider).asData?.value;
+    final courses = ref.watch(_coursesProvider).asData?.value;
+    final sessions = ref.watch(_sessionsProvider).asData?.value;
 
     return Padding(
       padding: AppTheme.screenPadding,
@@ -498,6 +519,17 @@ class AdminRecordsDetailScreen extends ConsumerWidget {
                 count: records.length,
               ),
               const SizedBox(height: 16),
+              _DangerButton(
+                label: 'Clear all records',
+                icon: Icons.playlist_remove_outlined,
+                confirmTitle: 'Clear all records?',
+                confirmBody:
+                    'This will permanently delete every attendance record. '
+                    'This action cannot be undone.',
+                collection: AppConstants.recordsCollection,
+                successMsg: 'All attendance records cleared.',
+              ),
+              const SizedBox(height: 16),
               if (records.isEmpty)
                 const Center(child: Text('No attendance records yet.'))
               else
@@ -508,11 +540,32 @@ class AdminRecordsDetailScreen extends ConsumerWidget {
                         const SizedBox(height: 12),
                     itemBuilder: (_, index) {
                       final record = records[index];
+
+                      final course = courses
+                          ?.where((c) => c.id == record.courseId)
+                          .firstOrNull;
+                      final session = sessions
+                          ?.where((s) => s.id == record.sessionId)
+                          .firstOrNull;
+                      final courseLabel = course != null
+                          ? (course.courseCode?.isNotEmpty == true
+                              ? '${course.courseCode} — ${course.name}'
+                              : course.name)
+                          : session != null
+                              ? 'Session · ${session.startTime.month}/${session.startTime.day} ${_twoDigits(session.startTime.hour)}:${_twoDigits(session.startTime.minute)}'
+                              : 'Attendance record';
+
+                      final studentName = allUsers
+                              ?.where((u) => u.id == record.studentId)
+                              .firstOrNull
+                              ?.name ??
+                          'Unknown student';
+
                       return AppCard(
                         child: ListTile(
-                          title: Text(record.courseId ?? record.sessionId),
+                          title: Text(courseLabel),
                           subtitle: Text(
-                            '${record.studentId} • ${record.status.name.toUpperCase()}',
+                            '$studentName • ${record.status.name.toUpperCase()}',
                           ),
                           trailing: Text(
                             '${record.timestamp.month}/${record.timestamp.day} ${_twoDigits(record.timestamp.hour)}:${_twoDigits(record.timestamp.minute)}',
@@ -541,6 +594,9 @@ class AdminSecurityLogsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logsAsync = ref.watch(_securityLogsProvider);
+    final allUsers = ref.watch(_allUsersProvider).asData?.value;
+    final sessions = ref.watch(_sessionsProvider).asData?.value;
+    final courses = ref.watch(_coursesProvider).asData?.value;
 
     return Padding(
       padding: AppTheme.screenPadding,
@@ -621,12 +677,62 @@ class AdminSecurityLogsScreen extends ConsumerWidget {
                               const SizedBox(height: 12),
                           itemBuilder: (_, index) {
                             final log = logs[index];
+
+                            // Resolve user name — distinguish loading vs not-found
+                            final String userName;
+                            if (allUsers == null) {
+                              userName = '…';
+                            } else {
+                              userName = allUsers
+                                      .where((u) => u.id == log.userId)
+                                      .firstOrNull
+                                      ?.name ??
+                                  'Unknown user';
+                            }
+
+                            // Resolve session — distinguish loading vs deleted
+                            String sessionLabel = 'N/A';
+                            if (log.sessionId != null &&
+                                log.sessionId!.isNotEmpty) {
+                              if (sessions == null) {
+                                sessionLabel = '…';
+                              } else {
+                                final session = sessions
+                                    .where((s) => s.id == log.sessionId)
+                                    .firstOrNull;
+                                if (session != null) {
+                                  final course = courses
+                                      ?.where((c) => c.id == session.courseId)
+                                      .firstOrNull;
+                                  final courseLabel = course != null
+                                      ? (course.courseCode?.isNotEmpty == true
+                                          ? course.courseCode!
+                                          : course.name)
+                                      : null;
+                                  sessionLabel = courseLabel != null
+                                      ? '$courseLabel · ${_formatTimestamp(session.startTime)}'
+                                      : _formatTimestamp(session.startTime);
+                                } else {
+                                  sessionLabel = 'Session (deleted)';
+                                }
+                              }
+                            }
+
+                            // Human-readable action title from snake_case
+                            final actionTitle = _formatAction(log.action);
+                            // Show detail text only when it adds info beyond the action name
+                            final detailsText =
+                                log.details.isNotEmpty &&
+                                        log.details != log.action
+                                    ? log.details
+                                    : null;
+
                             return AppCard(
                               child: ListTile(
                                 isThreeLine: true,
                                 title: Text(
-                                  log.action.isNotEmpty
-                                      ? log.action
+                                  actionTitle.isNotEmpty
+                                      ? actionTitle
                                       : 'Security event',
                                   style: Theme.of(
                                     context,
@@ -636,10 +742,12 @@ class AdminSecurityLogsScreen extends ConsumerWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const SizedBox(height: 6),
-                                    Text(log.details),
-                                    const SizedBox(height: 8),
+                                    if (detailsText != null) ...[
+                                      Text(detailsText),
+                                      const SizedBox(height: 8),
+                                    ],
                                     Text(
-                                      'User: ${log.userId.isNotEmpty ? log.userId : 'Unknown'} • Session: ${log.sessionId ?? 'N/A'}',
+                                      'User: $userName • Session: $sessionLabel',
                                       style: Theme.of(
                                         context,
                                       ).textTheme.bodySmall,
@@ -660,6 +768,16 @@ class AdminSecurityLogsScreen extends ConsumerWidget {
                             );
                           },
                         ),
+                      const SizedBox(height: 16),
+                      _DangerButton(
+                        label: 'Clear security logs',
+                        icon: Icons.shield_outlined,
+                        confirmTitle: 'Clear security logs?',
+                        confirmBody:
+                            'This will permanently delete all security logs and cannot be undone.',
+                        collection: AppConstants.securityLogsCollection,
+                        successMsg: 'Security logs cleared.',
+                      ),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -679,6 +797,13 @@ class AdminSecurityLogsScreen extends ConsumerWidget {
   }
 
   String _twoDigits(int value) => value.toString().padLeft(2, '0');
+
+  String _formatAction(String action) {
+    return action
+        .split('_')
+        .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
 
   List<_SecurityLogPoint> _groupLogsByDay(List<SecurityLog> logs) {
     final now = DateTime.now();
@@ -819,6 +944,10 @@ class _SecurityLogChart extends StatelessWidget {
   }
 }
 
+final _allUsersProvider = StreamProvider<List<AppUser>>((ref) {
+  return ref.watch(userRepositoryProvider).watchUsers();
+});
+
 final _studentsProvider = StreamProvider<List<Student>>((ref) {
   return ref.watch(catalogRepositoryProvider).watchStudents();
 });
@@ -879,3 +1008,100 @@ final _securityLogsProvider = StreamProvider<List<SecurityLog>>((ref) {
         }).toList();
       });
 });
+
+class _DangerButton extends StatefulWidget {
+  const _DangerButton({
+    required this.label,
+    required this.icon,
+    required this.confirmTitle,
+    required this.confirmBody,
+    required this.collection,
+    required this.successMsg,
+  });
+
+  final String label;
+  final IconData icon;
+  final String confirmTitle;
+  final String confirmBody;
+  final String collection;
+  final String successMsg;
+
+  @override
+  State<_DangerButton> createState() => _DangerButtonState();
+}
+
+class _DangerButtonState extends State<_DangerButton> {
+  bool _loading = false;
+
+  Future<void> _deleteAllDocs() async {
+    final db = FirebaseFirestore.instance;
+    const batchSize = 400;
+    while (true) {
+      final snap = await db.collection(widget.collection).limit(batchSize).get();
+      if (snap.docs.isEmpty) break;
+      final batch = db.batch();
+      for (final doc in snap.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      if (snap.docs.length < batchSize) break;
+    }
+  }
+
+  Future<void> _confirm() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(widget.confirmTitle),
+        content: Text(widget.confirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _loading = true);
+    try {
+      await _deleteAllDocs();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.successMsg), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.red,
+        side: BorderSide(color: Colors.red.shade300),
+      ),
+      onPressed: _loading ? null : _confirm,
+      icon: _loading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.red),
+            )
+          : Icon(widget.icon),
+      label: Text(widget.label),
+    );
+  }
+}

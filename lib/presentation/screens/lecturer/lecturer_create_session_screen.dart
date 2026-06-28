@@ -85,6 +85,12 @@ class _LecturerCreateSessionScreenState
           context,
         ).showSnackBar(SnackBar(content: Text(e.message)));
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start session: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _creating = false);
     }
@@ -113,7 +119,10 @@ class _LecturerCreateSessionScreenState
 
     return SingleChildScrollView(
       padding: AppTheme.screenPadding,
-      child: lecturerAsync.when(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: lecturerAsync.when(
         data: (lecturer) {
           return coursesAsync.when(
             data: (allCourses) {
@@ -182,6 +191,8 @@ class _LecturerCreateSessionScreenState
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Text('$e'),
       ),
+        ),
+      ),
     );
   }
 }
@@ -209,7 +220,10 @@ class _ActiveSessionView extends ConsumerWidget {
 
         return SingleChildScrollView(
           padding: AppTheme.screenPadding,
-          child: Column(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
             children: [
               AppCard(
                 child: Column(
@@ -226,8 +240,10 @@ class _ActiveSessionView extends ConsumerWidget {
                     const SizedBox(height: 16),
                     QrImageView(
                       data: payload,
-                      size: 220,
+                      size: (MediaQuery.of(context).size.width * 0.75)
+                          .clamp(260.0, 340.0),
                       backgroundColor: Colors.white,
+                      errorCorrectionLevel: QrErrorCorrectLevel.H,
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -245,6 +261,8 @@ class _ActiveSessionView extends ConsumerWidget {
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               ),
             ],
+              ),
+            ),
           ),
         );
       },
